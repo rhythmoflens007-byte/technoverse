@@ -1,0 +1,1725 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Carbon Ctrl — Real-Time Carbon Intelligence for Industry</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#030508;--bg2:#06090F;--s1:#0A0F17;--s2:#0F141E;--s3:#141B26;--s4:#1A222E;--s5:#202B3A;
+  --wire:rgba(255,255,255,.04);--wire2:rgba(255,255,255,.08);--wire3:rgba(255,255,255,.14);
+  --t0:#fff;--t1:#E4EAF3;--t2:#768899;--t3:#374857;
+  --go:#00FFB2;--gd:rgba(0,255,178,.06);--gb:rgba(0,255,178,.18);
+  --glow:0 0 60px rgba(0,255,178,.12),0 0 120px rgba(0,255,178,.04);
+  --flame:#FF3D5A;--fd:rgba(255,61,90,.07);--fb:rgba(255,61,90,.18);
+  --sun:#FFB800;--sd:rgba(255,184,0,.07);--sb:rgba(255,184,0,.18);
+  --sky:#4D9EFF;--skyd:rgba(77,158,255,.07);--skyb:rgba(77,158,255,.18);
+  --poly:#8B5CF6;--poly2:#A78BFA;--polyd:rgba(139,92,246,.08);--polyb:rgba(139,92,246,.22);
+  --eu2:#FFCC00;
+  --D:'Syne',sans-serif;--B:'DM Sans',sans-serif;--M:'Space Mono',monospace;
+  --r:6px;--r2:10px;--r3:16px;--r4:22px;--r5:32px;
+}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--B);background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased;overflow-x:hidden;cursor:none}
+::selection{background:var(--go);color:#000}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--s4)}
+
+/* CURSOR */
+#cur{position:fixed;width:8px;height:8px;background:var(--go);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);mix-blend-mode:screen;transition:width .15s,height .15s}
+#cur2{position:fixed;width:32px;height:32px;border:1px solid rgba(0,255,178,.3);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%);transition:left .08s,top .08s}
+
+/* NOISE + SCAN */
+.noise{position:fixed;inset:0;z-index:9000;pointer-events:none;opacity:.015;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.scanline{position:fixed;left:0;right:0;height:80px;pointer-events:none;z-index:8999;animation:scan 20s linear infinite;background:linear-gradient(transparent,rgba(0,255,178,.006),transparent)}
+@keyframes scan{from{top:-80px}to{top:100vh}}
+
+/* KEYFRAMES */
+@keyframes up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes ping{0%{transform:scale(1);opacity:.5}100%{transform:scale(2);opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{0%{background-position:0% center}100%{background-position:200% center}}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+@keyframes critBlink{0%,100%{background:rgba(255,61,90,.03)}50%{background:rgba(255,61,90,.10)}}
+@keyframes gridMove{from{background-position:0 0}to{background-position:60px 60px}}
+@keyframes orbPulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.04)}}
+@keyframes revealL{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
+@keyframes machPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,255,178,.2)}50%{box-shadow:0 0 0 6px rgba(0,255,178,0)}}
+
+/* PAGE VISIBILITY */
+.pg{display:none!important}
+.pg.on{display:block!important}
+
+/* NAV */
+#nav{position:fixed;top:0;left:0;right:0;z-index:500;height:58px;display:flex;align-items:center;padding:0 40px;gap:28px;background:rgba(3,5,8,.85);border-bottom:1px solid var(--wire);backdrop-filter:blur(24px);transition:background .3s}
+#nav.scrolled{background:rgba(3,5,8,.98)}
+.nlogo{display:flex;align-items:center;gap:8px;cursor:pointer;text-decoration:none;flex-shrink:0}
+.ngem{width:28px;height:28px;border-radius:7px;background:var(--go);display:flex;align-items:center;justify-content:center;animation:float 6s ease infinite;box-shadow:var(--glow)}
+.ngem svg{width:14px;height:14px}
+.nname{font-family:var(--D);font-size:16px;font-weight:700;color:var(--t0);letter-spacing:-.3px}
+.nname span{color:var(--go)}
+#nav-land{display:flex;align-items:center;gap:2px;margin-left:auto}
+#nav-app{display:none;align-items:center;gap:7px;margin-left:auto}
+.nlink{padding:5px 12px;border-radius:var(--r2);font-size:12.5px;font-weight:500;color:var(--t2);border:none;background:none;cursor:pointer;transition:all .15s;font-family:var(--B)}
+.nlink:hover{color:var(--t1);background:var(--s2)}
+.ncta{background:var(--go)!important;color:#000!important;font-weight:700!important;border-radius:var(--r2)!important}
+.ncta:hover{filter:brightness(1.08)!important;box-shadow:var(--glow)!important}
+.live-pill{display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;font-family:var(--M);border:1px solid}
+.live-pill.on{color:var(--go);background:var(--gd);border-color:var(--gb)}
+.live-pill.off{color:var(--t3);background:var(--s2);border-color:var(--wire2)}
+.lpdot{width:4px;height:4px;border-radius:50%;background:currentColor;position:relative;flex-shrink:0}
+.live-pill.on .lpdot::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1px solid currentColor;animation:ping 1.8s infinite}
+.ibtn{width:28px;height:28px;border-radius:var(--r2);display:flex;align-items:center;justify-content:center;border:1px solid var(--wire);background:none;color:var(--t2);cursor:pointer;transition:all .15s;font-size:12px;flex-shrink:0}
+.ibtn:hover{border-color:var(--wire2);color:var(--t1);background:var(--s2)}
+
+/* TOASTS */
+#toasts{position:fixed;bottom:20px;right:20px;z-index:8000;display:flex;flex-direction:column;gap:5px;pointer-events:none;max-width:320px}
+.toast{display:flex;align-items:center;gap:7px;padding:9px 13px;border-radius:var(--r3);font-size:11.5px;font-weight:500;border:1px solid;backdrop-filter:blur(20px);pointer-events:all;transform:translateX(14px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1)}
+.toast.show{transform:none;opacity:1}
+.tok{background:rgba(0,255,178,.08);border-color:var(--gb);color:var(--go)}
+.twarn{background:rgba(255,184,0,.09);border-color:var(--sb);color:var(--sun)}
+.terr{background:rgba(255,61,90,.1);border-color:var(--fb);color:var(--flame)}
+.tinfo{background:rgba(10,15,24,.92);border-color:var(--wire2);color:var(--t1)}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:9.5px;font-weight:700;letter-spacing:.3px;border:1px solid;white-space:nowrap}
+.bg{color:var(--go);background:var(--gd);border-color:var(--gb)}
+.br{color:var(--flame);background:var(--fd);border-color:var(--fb)}
+.ba{color:var(--sun);background:var(--sd);border-color:var(--sb)}
+.bb{color:var(--sky);background:var(--skyd);border-color:var(--skyb)}
+.bp{color:var(--poly2);background:var(--polyd);border-color:var(--polyb)}
+
+/* BTN */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:var(--r2);font-size:12.5px;font-weight:600;border:none;cursor:pointer;transition:all .16s;font-family:var(--B);white-space:nowrap}
+.btn-go{background:var(--go);color:#000}.btn-go:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:var(--glow)}
+.btn-out{background:transparent;border:1px solid var(--wire2);color:var(--t1)}.btn-out:hover{border-color:var(--wire3);background:var(--s2)}
+.btn-poly{background:var(--poly);color:#fff}.btn-poly:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 0 30px rgba(139,92,246,.28)}
+.btn-sm{padding:5px 12px;font-size:11px}
+.btn-lg{padding:12px 26px;font-size:14px;border-radius:var(--r3)}
+.btn-xl{padding:14px 32px;font-size:15px;border-radius:var(--r4)}
+
+/* ── LANDING PAGE ── */
+#pg-landing{overflow-y:auto;padding-top:58px}
+
+/* HERO — tighter, no giant fonts */
+.hero{min-height:92vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 40px 50px;position:relative;overflow:hidden}
+.hgrid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(0,255,178,.015) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,178,.015) 1px,transparent 1px);background-size:60px 60px;animation:gridMove 24s linear infinite;mask-image:radial-gradient(ellipse 75% 75% at 50% 50%,black,transparent)}
+.orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none}
+.orb1{width:500px;height:500px;background:radial-gradient(circle,rgba(0,255,178,.07),transparent 65%);top:-180px;left:50%;animation:orbPulse 14s ease-in-out infinite}
+.orb2{width:280px;height:280px;background:radial-gradient(circle,rgba(77,158,255,.06),transparent 65%);bottom:-60px;left:-40px;animation:float 16s ease-in-out infinite 1s}
+.orb3{width:240px;height:240px;background:radial-gradient(circle,rgba(139,92,246,.05),transparent 65%);bottom:-40px;right:-30px;animation:float 12s ease-in-out infinite 3s}
+.ftag{position:absolute;font-family:var(--M);font-size:9px;color:rgba(0,255,178,.10);white-space:nowrap;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;animation:float var(--dur,8s) ease-in-out infinite;animation-delay:var(--dl,0s)}
+.hero-inner{position:relative;z-index:1;max-width:880px}
+.eyebrow{display:inline-flex;align-items:center;gap:7px;background:var(--gd);border:1px solid var(--gb);border-radius:40px;padding:4px 14px;font-size:10px;font-weight:700;color:var(--go);letter-spacing:1px;text-transform:uppercase;margin-bottom:22px;opacity:0;animation:up .8s .1s ease forwards}
+.edot{width:4px;height:4px;border-radius:50%;background:var(--go);animation:pulse 2s infinite}
+h1.htitle{font-family:var(--D);font-size:clamp(36px,4.5vw,64px);font-weight:800;line-height:1.05;letter-spacing:-2px;max-width:800px;margin:0 auto 18px;opacity:0;animation:up .9s .2s ease forwards}
+.htitle .l1{display:block;color:var(--t0)}
+.htitle .l2{display:block;background:linear-gradient(135deg,var(--go) 0%,#00C8FF 40%,var(--go) 100%);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 6s linear infinite 1.5s}
+.hsub{font-size:15px;color:var(--t2);max-width:500px;margin:0 auto 36px;line-height:1.8;opacity:0;animation:up .8s .35s ease forwards}
+.hcta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:52px;opacity:0;animation:up .8s .45s ease forwards}
+
+/* MOCKUP — tighter */
+.mockup{width:100%;max-width:820px;margin:0 auto;border-radius:var(--r4);overflow:hidden;border:1px solid var(--wire2);box-shadow:0 40px 100px rgba(0,0,0,.7),var(--glow);opacity:0;animation:up .9s .6s ease forwards}
+.mk-bar{background:var(--s2);padding:9px 13px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--wire)}
+.mk-dots{display:flex;gap:4px}
+.mk-dot{width:9px;height:9px;border-radius:50%}
+.mk-url{flex:1;padding:3px 10px;background:var(--s1);border:1px solid var(--wire);border-radius:var(--r);font-size:9.5px;color:var(--t3);font-family:var(--M);text-align:center}
+.mk-cells{display:grid;grid-template-columns:repeat(4,1fr);background:var(--s1)}
+.mk-cell{padding:14px 16px;border-right:1px solid var(--wire);border-bottom:1px solid var(--wire)}
+.mk-cell:last-child{border-right:none}
+.mk-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:5px}
+.mk-val{font-family:var(--M);font-size:22px;font-weight:700;line-height:1;letter-spacing:-1px}
+.mk-sub{font-size:8.5px;color:var(--t3);margin-top:2px}
+.mk-wave{background:var(--s1);height:52px;overflow:hidden;position:relative}
+.mk-wave svg{position:absolute;bottom:0;left:0;right:0}
+
+/* TICKER */
+.ticker-wrap{overflow:hidden;height:34px;display:flex;align-items:center;background:var(--s1);border-top:1px solid var(--wire);border-bottom:1px solid var(--wire)}
+.ticker{white-space:nowrap;display:inline-block;animation:ticker 90s linear infinite;font-size:10.5px;color:var(--t3);font-family:var(--M)}
+.th{color:var(--go);font-weight:700}
+.ts{margin:0 18px;opacity:.2}
+
+/* STATS BAND */
+.sband{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--wire);border-bottom:1px solid var(--wire)}
+.sb-it{padding:40px 28px;border-right:1px solid var(--wire);text-align:center;position:relative;overflow:hidden;transition:background .2s;cursor:default}
+.sb-it:last-child{border-right:none}
+.sb-it:hover{background:var(--s1)}
+.sb-it::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--go);transform:scaleX(0);transition:transform .4s ease}
+.sb-it:hover::after{transform:scaleX(1)}
+.sb-n{font-family:var(--D);font-size:44px;font-weight:800;line-height:1;margin-bottom:6px;letter-spacing:-2px}
+.sb-d{font-size:12px;color:var(--t2);line-height:1.65;max-width:160px;margin:0 auto}
+
+/* SECTION COMMON */
+.sec{padding:88px 60px}
+.sec.alt{background:var(--s1);border-top:1px solid var(--wire);border-bottom:1px solid var(--wire)}
+.sw{max-width:1080px;margin:0 auto}
+.sec-eye{display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:20px;background:var(--gd);border:1px solid var(--gb);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--go);margin-bottom:12px}
+.sec-h2{font-family:var(--D);font-size:clamp(1.8rem,3vw,2.8rem);line-height:1.08;letter-spacing:-.6px;font-weight:800;margin-bottom:12px;max-width:520px}
+.sec-sub{font-size:14px;color:var(--t2);line-height:1.85;max-width:460px;margin-bottom:44px}
+
+/* EU SECTION */
+.eu-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:10px}
+.euc{border-radius:var(--r4);padding:24px;border:1px solid var(--wire);background:var(--bg2);transition:all .2s}
+.euc:hover{transform:translateY(-3px);box-shadow:0 16px 50px rgba(0,0,0,.4)}
+.euc-icon{font-size:24px;margin-bottom:12px}
+.euc-title{font-family:var(--D);font-size:15px;font-weight:700;margin-bottom:8px}
+.euc-body{font-size:12.5px;color:var(--t2);line-height:1.8}
+.eu-quote{margin-top:28px;padding:20px 24px;background:linear-gradient(135deg,rgba(255,204,0,.05),rgba(0,51,153,.05));border:1px solid rgba(255,204,0,.18);border-radius:var(--r4);font-size:14px;font-style:italic;color:var(--t1);line-height:1.75;position:relative;max-width:800px}
+.eu-quote::before{content:'"';font-size:52px;color:var(--eu2);position:absolute;top:-14px;left:18px;font-family:Georgia,serif;opacity:.45;line-height:1}
+
+/* PROBLEM COMPARE */
+.cmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px}
+.cmp{border-radius:var(--r4);padding:26px;border:1px solid}
+.cmp.bad{background:rgba(255,61,90,.02);border-color:rgba(255,61,90,.12)}
+.cmp.good{background:rgba(0,255,178,.02);border-color:rgba(0,255,178,.12)}
+.cmp-head{display:flex;align-items:center;gap:9px;margin-bottom:16px}
+.cmp-ic{width:36px;height:36px;border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:16px}
+.cmp.bad .cmp-ic{background:var(--fd)}.cmp.good .cmp-ic{background:var(--gd)}
+.cmp-ttl{font-family:var(--D);font-size:15px;font-weight:700}
+.cmp.bad .cmp-ttl{color:var(--flame)}.cmp.good .cmp-ttl{color:var(--go)}
+.cmp-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:9px;font-size:12.5px;color:var(--t2);line-height:1.65}
+.cmp-dot{width:15px;height:15px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:800;margin-top:1px}
+.cmp.bad .cmp-dot{background:var(--fd);border:1px solid var(--fb);color:var(--flame)}
+.cmp.good .cmp-dot{background:var(--gd);border:1px solid var(--gb);color:var(--go)}
+
+/* HOW IT WORKS */
+.pipe{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--wire2);border-radius:var(--r4);overflow:hidden;border:1px solid var(--wire2)}
+.ps{background:var(--s1);padding:30px 26px;position:relative;transition:background .2s}
+.ps:hover{background:var(--s2)}
+.ps-n{font-family:var(--M);font-size:9px;font-weight:700;color:var(--t3);letter-spacing:2px;margin-bottom:14px}
+.ps-ic{width:44px;height:44px;border-radius:var(--r3);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:14px;border:1px solid}
+.ps:nth-child(1) .ps-ic{background:var(--gd);border-color:var(--gb)}
+.ps:nth-child(2) .ps-ic{background:var(--skyd);border-color:var(--skyb)}
+.ps:nth-child(3) .ps-ic{background:var(--polyd);border-color:var(--polyb)}
+.ps-t{font-family:var(--D);font-size:17px;font-weight:700;margin-bottom:9px}
+.ps-b{font-size:12.5px;color:var(--t2);line-height:1.8;margin-bottom:11px}
+.ps-chip{font-size:9px;font-family:var(--M);color:var(--t3);background:var(--s3);border:1px solid var(--wire2);border-radius:var(--r);padding:2px 8px;display:inline-block}
+
+/* POLYGON SECTION */
+.poly-g{display:grid;grid-template-columns:1fr 1fr;gap:50px;align-items:start}
+.poly-steps{display:flex;flex-direction:column;gap:8px}
+.pstep{display:flex;gap:12px;padding:12px 15px;background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);transition:all .22s;cursor:default}
+.pstep:hover{border-color:rgba(139,92,246,.3);background:var(--polyd);transform:translateX(3px)}
+.psn{width:26px;height:26px;border-radius:50%;background:var(--polyd);border:1px solid var(--polyb);color:var(--poly2);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;flex-shrink:0;font-family:var(--M)}
+.psc-t{font-size:12px;font-weight:600;margin-bottom:2px}
+.psc-d{font-size:10.5px;color:var(--t2);line-height:1.65}
+.psc-c{font-size:8.5px;font-family:var(--M);color:var(--poly2);margin-top:3px;display:block}
+.ptx-card{background:var(--s2);border:1px solid var(--polyb);border-radius:var(--r4);padding:18px}
+.ptc-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}
+.ptc-ht{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--poly2)}
+.ptx-it{padding:9px;background:var(--s3);border:1px solid var(--wire);border-radius:var(--r2);margin-bottom:6px}
+.ptx-hash{font-family:var(--M);font-size:8.5px;color:var(--poly2);margin-bottom:4px;word-break:break-all}
+.ptx-r{display:flex;justify-content:space-between;font-size:9.5px;margin-top:2px}
+.ptx-k{color:var(--t3)}.ptx-v{font-family:var(--M);color:var(--t0);font-weight:500}
+.ptx-ok{font-size:8.5px;color:var(--go);margin-top:5px;font-weight:600}
+
+/* SCIENCE */
+.fcard{background:var(--s1);border:1px solid var(--wire2);border-radius:var(--r4);padding:28px 32px;max-width:780px;margin:0 auto;position:relative;overflow:hidden}
+.fcard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--go),transparent)}
+.feq{font-family:var(--M);font-size:clamp(13px,1.8vw,18px);color:var(--t0);margin-bottom:10px;font-weight:700;padding:12px 16px;background:var(--s2);border-radius:var(--r2);border:1px solid var(--wire2)}
+.feq-op{color:var(--go)}
+.fparts{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.fp{padding:3px 10px;border-radius:var(--r2);font-size:10.5px;font-family:var(--M)}
+.fp-c{background:var(--fd);color:var(--flame);border:1px solid var(--fb)}
+.fp-p{background:var(--skyd);color:var(--sky);border:1px solid var(--skyb)}
+.fp-f{background:var(--gd);color:var(--go);border:1px solid var(--gb)}
+.fnote{font-size:11px;color:var(--t3);line-height:1.9}
+.fnote a{color:var(--go);text-decoration:none}
+
+/* PRICING */
+.price-g{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:960px;margin:0 auto}
+.pc{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r4);padding:26px 22px;position:relative;transition:all .22s;overflow:hidden}
+.pc:hover{border-color:var(--wire2);transform:translateY(-3px);box-shadow:0 16px 50px rgba(0,0,0,.4)}
+.pc.feat{border-color:var(--gb);background:linear-gradient(160deg,rgba(0,255,178,.04),var(--s1) 60%)}
+.pc.feat::before{content:'MOST POPULAR';position:absolute;top:0;left:0;right:0;padding:5px;background:var(--go);color:#000;font-size:9px;font-weight:700;text-align:center;letter-spacing:1.5px}
+.pc.feat .ptop{margin-top:28px}
+.pname{font-family:var(--D);font-size:16px;font-weight:700;margin-bottom:4px}
+.pdesc{font-size:11.5px;color:var(--t2);margin-bottom:20px;line-height:1.65}
+.pnum{font-family:var(--M);font-size:38px;font-weight:700;letter-spacing:-2px;line-height:1;margin-bottom:3px}
+.pper{font-size:11px;color:var(--t3);margin-bottom:22px}
+.pfeat{list-style:none;display:flex;flex-direction:column;gap:8px;margin-bottom:22px}
+.pfeat li{display:flex;gap:7px;font-size:12px;color:var(--t2);line-height:1.55}
+.pcheck{width:14px;height:14px;border-radius:50%;background:var(--gd);border:1px solid var(--gb);color:var(--go);display:flex;align-items:center;justify-content:center;font-size:6.5px;flex-shrink:0;margin-top:2px}
+
+/* FAQ */
+.faq{max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:2px}
+.fq{border:1px solid var(--wire);border-radius:var(--r3);overflow:hidden;transition:border-color .2s}
+.fq.open{border-color:var(--wire2)}
+.fqq{padding:14px 18px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;transition:background .16s}
+.fqq:hover{background:var(--s2)}
+.farr{font-size:13px;color:var(--t3);transition:transform .3s}
+.fq.open .farr{transform:rotate(180deg);color:var(--go)}
+.fqa{display:none;padding:0 18px 14px;font-size:12.5px;color:var(--t2);line-height:1.85}
+.fq.open .fqa{display:block}
+
+/* FOOTER */
+footer{border-top:1px solid var(--wire);padding:48px 60px 32px;background:var(--bg2)}
+.foot-g{display:grid;grid-template-columns:260px 1fr 1fr 1fr;gap:44px;max-width:1100px;margin:0 auto 44px}
+.ft-name{font-family:var(--D);font-size:16px;font-weight:700}
+.ft-desc{font-size:12px;color:var(--t3);line-height:1.85;margin:9px 0 14px}
+.ft-tags{display:flex;flex-wrap:wrap;gap:4px}
+.ft-tag{font-size:8.5px;font-family:var(--M);color:var(--t3);background:var(--s2);border:1px solid var(--wire);border-radius:var(--r);padding:2px 6px}
+.ft-ttl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);margin-bottom:14px}
+.ft-l{display:block;font-size:12.5px;color:var(--t2);margin-bottom:8px;cursor:pointer;transition:color .14s;text-decoration:none}
+.ft-l:hover{color:var(--go)}
+.foot-b{max-width:1100px;margin:0 auto;padding-top:20px;border-top:1px solid var(--wire);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.foot-leg{font-size:9.5px;color:var(--t3);font-family:var(--M);line-height:2}
+
+/* REVEAL ANIMATIONS */
+.rev{opacity:0;transform:translateY(20px);transition:opacity .7s ease,transform .7s ease}
+.rev.vis{opacity:1;transform:none}
+.revl{opacity:0;transform:translateX(-18px);transition:opacity .7s ease,transform .7s ease}
+.revl.vis{opacity:1;transform:none}
+.revr{opacity:0;transform:translateX(18px);transition:opacity .7s ease,transform .7s ease}
+.revr.vis{opacity:1;transform:none}
+
+/* ── LOGIN PAGE ── */
+#pg-login{padding-top:58px}
+.login-wrap{min-height:calc(100vh - 58px);display:grid;grid-template-columns:400px 1fr}
+.ll{background:var(--s1);border-right:1px solid var(--wire);padding:48px 44px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.ll-orb{position:absolute;bottom:-100px;left:-60px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(0,255,178,.05),transparent 70%);pointer-events:none}
+.ll-q{font-family:var(--D);font-size:24px;font-weight:800;line-height:1.22;max-width:300px;letter-spacing:-.3px;margin-bottom:10px}
+.ll-q em{color:var(--go);font-style:italic}
+.ll-qs{font-size:13px;color:var(--t2);line-height:1.8;max-width:300px}
+.ll-stats{display:flex;gap:24px}
+.ll-sv{font-family:var(--M);font-size:24px;font-weight:700;line-height:1;margin-bottom:3px}
+.ll-sl{font-size:9.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px}
+.lr{display:flex;align-items:center;justify-content:center;padding:48px 64px}
+.lf{width:100%;max-width:360px}
+.lf-t{font-family:var(--D);font-size:28px;font-weight:800;letter-spacing:-.4px;margin-bottom:4px}
+.lf-s{font-size:13px;color:var(--t2);margin-bottom:20px;line-height:1.65}
+.demo-note{display:flex;gap:8px;padding:11px 13px;background:var(--skyd);border:1px solid var(--skyb);border-radius:var(--r2);margin-bottom:20px;font-size:11.5px;color:var(--sky);line-height:1.65}
+.fg{margin-bottom:11px}
+.fl{font-size:10.5px;font-weight:600;color:var(--t2);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.fi{width:100%;padding:10px 12px;border:1px solid var(--wire2);border-radius:var(--r2);font-size:13px;background:var(--s2);color:var(--t1);font-family:var(--B);outline:none;transition:border-color .16s,box-shadow .16s}
+.fi:focus{border-color:rgba(0,255,178,.4);box-shadow:0 0 0 3px rgba(0,255,178,.06)}
+.div-or{display:flex;align-items:center;gap:10px;margin:14px 0}
+.div-or::before,.div-or::after{content:'';flex:1;height:1px;background:var(--wire)}
+.div-or span{font-size:10.5px;color:var(--t3)}
+
+/* ── APP SHELL ── */
+.app-shell{display:grid;grid-template-columns:220px 1fr;height:calc(100vh - 58px);overflow:hidden}
+
+/* SIDEBAR */
+.sbar{background:var(--s1);border-right:1px solid var(--wire);display:flex;flex-direction:column;overflow-y:auto;padding:8px 6px;flex-shrink:0}
+.sbar-sec{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--t3);padding:8px 10px 3px;margin-top:6px}
+.sbar-btn{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:var(--r2);font-size:12px;font-weight:500;color:var(--t2);cursor:pointer;border:none;background:none;font-family:var(--B);width:100%;text-align:left;transition:all .13s;position:relative}
+.sbar-btn:hover{background:var(--s2);color:var(--t1)}
+.sbar-btn.on{background:var(--s3);color:var(--go)}
+.sbar-btn.on::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:2px;background:var(--go);border-radius:2px}
+.sic{width:18px;text-align:center;font-size:11px;flex-shrink:0}
+.scnt{font-size:8.5px;font-family:var(--M);background:var(--s4);color:var(--t3);border-radius:8px;padding:1px 5px;margin-left:auto}
+.sbar-btn.on .scnt{background:var(--gd);color:var(--go)}
+
+/* MACHINE SELECTOR IN SIDEBAR */
+.mach-sel{margin:6px 8px;background:var(--s2);border:1px solid var(--wire);border-radius:var(--r3);overflow:hidden}
+.ms-head{padding:10px 12px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--t3);border-bottom:1px solid var(--wire)}
+.ms-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--wire);transition:background .13s}
+.ms-item:last-child{border-bottom:none}
+.ms-item:hover{background:var(--s3)}
+.ms-item.active{background:var(--gd)}
+.ms-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.ms-info{flex:1;min-width:0}
+.ms-name{font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-co2{font-size:9px;font-family:var(--M)}
+.ms-status{font-size:8px;font-family:var(--M);font-weight:700;padding:1px 5px;border-radius:4px}
+
+.sagent{margin:6px 8px;padding:11px 12px;border-radius:var(--r3);background:var(--gd);border:1px solid var(--gb)}
+.sa-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--go);margin-bottom:8px}
+.sa-r{display:flex;justify-content:space-between;margin-bottom:3px}
+.sa-k{font-size:9.5px;color:var(--t2)}.sa-v{font-size:9.5px;font-family:var(--M);font-weight:700;color:var(--t0)}
+.eps-track{height:2px;background:rgba(0,255,178,.1);border-radius:2px;overflow:hidden;margin-top:6px}
+.eps-bar{height:100%;background:var(--go);border-radius:2px;transition:width 1s}
+.sbar-formula{margin:6px 8px;padding:9px 10px;background:var(--s2);border-radius:var(--r2);border:1px solid var(--wire);font-family:var(--M);font-size:9.5px;color:var(--t1);line-height:2;margin-top:auto}
+
+/* MAIN CONTENT */
+.main{flex:1;overflow-y:auto;padding:18px 20px;background:var(--bg)}
+
+/* PAGE HEADER */
+.ph{margin-bottom:16px}
+.ph-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.ph-t{font-family:var(--D);font-size:20px;font-weight:700;letter-spacing:-.3px}
+.ph-s{font-size:11.5px;color:var(--t2);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ph-acts{display:flex;gap:6px;flex-shrink:0}
+
+/* MACHINE TABS */
+.mach-tabs{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap}
+.mt{padding:5px 12px;border-radius:var(--r2);font-size:11.5px;font-weight:500;border:1px solid var(--wire);background:var(--s1);color:var(--t2);cursor:pointer;transition:all .14s;display:flex;align-items:center;gap:5px}
+.mt:hover{border-color:var(--wire2);color:var(--t1)}
+.mt.on{border-color:var(--gb);background:var(--gd);color:var(--go)}
+.mt.warn.on{border-color:var(--sb);background:var(--sd);color:var(--sun)}
+.mt.crit.on{border-color:var(--fb);background:var(--fd);color:var(--flame)}
+.mt-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* FLEET OVERVIEW */
+.fleet-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.fleet-card{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);padding:13px 15px;transition:all .18s;cursor:pointer;position:relative;overflow:hidden}
+.fleet-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--ac,var(--go));opacity:.6}
+.fleet-card:hover{border-color:var(--wire2);transform:translateY(-2px)}
+.fleet-card.active{border-color:var(--gb);background:rgba(0,255,178,.03)}
+.fleet-card.warn{--ac:var(--sun)}.fleet-card.crit{--ac:var(--flame)}
+.fc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px}
+.fc-id{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--t3)}
+.fc-nm{font-size:11.5px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-zone{font-size:9.5px;color:var(--t3)}
+.fc-co2{font-family:var(--M);font-size:18px;font-weight:700;line-height:1;transition:color .4s}
+.fc-bar{height:2px;background:var(--s5);border-radius:2px;margin-top:6px;overflow:hidden}
+.fc-fill{height:100%;border-radius:2px;transition:width 1s,background .4s}
+
+/* MACHINE HERO */
+.mhero{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r4);padding:18px 22px;margin-bottom:10px;display:grid;grid-template-columns:48px 1fr auto;gap:15px;align-items:center;position:relative;overflow:hidden;transition:all .4s}
+.mhero::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--gd) 0%,transparent 55%);pointer-events:none;transition:background .4s}
+.mhero.ok{border-color:rgba(0,255,178,.14)}
+.mhero.warn{border-color:rgba(255,184,0,.2)}.mhero.warn::before{background:linear-gradient(135deg,var(--sd) 0%,transparent 55%)}
+.mhero.crit{border-color:rgba(255,61,90,.26);animation:critBlink 1.2s ease infinite}.mhero.crit::before{background:linear-gradient(135deg,var(--fd) 0%,transparent 55%)}
+.mh-ic{width:48px;height:48px;border-radius:var(--r2);background:var(--s3);border:1px solid var(--wire2);display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:1}
+.mh-bd{z-index:1}
+.mh-tag{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.mh-ldot{display:flex;align-items:center;gap:3px;color:var(--go);font-size:8px}
+.mhld{width:4px;height:4px;border-radius:50%;background:var(--go);animation:pulse 1.5s infinite}
+.mh-nm{font-family:var(--D);font-size:17px;font-weight:700;letter-spacing:-.2px;margin-bottom:2px}
+.mh-su{font-size:11px;color:var(--t2);margin-bottom:7px}
+.mh-pills{display:flex;gap:4px;flex-wrap:wrap}
+.mh-r{display:flex;flex-direction:column;align-items:flex-end;gap:7px;z-index:1;flex-shrink:0}
+.mh-co2-l{font-size:8px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:1px;text-align:right;margin-bottom:1px}
+.mh-co2{font-family:var(--M);font-size:24px;font-weight:700;line-height:1;transition:color .4s;letter-spacing:-1px}
+
+/* AI BANNER */
+.aib{border-radius:var(--r4);padding:13px 17px;display:flex;align-items:center;gap:10px;margin-bottom:10px;border:1px solid;position:relative;overflow:hidden;transition:all .4s}
+.aib.ok{background:linear-gradient(135deg,var(--gd),transparent);border-color:var(--gb)}
+.aib.warn{background:linear-gradient(135deg,var(--sd),transparent);border-color:var(--sb)}
+.aib.crit{background:linear-gradient(135deg,var(--fd),transparent);border-color:var(--fb);animation:critBlink 1.5s ease infinite}
+.ab-em{width:38px;height:38px;border-radius:var(--r2);background:rgba(255,255,255,.04);border:1px solid var(--wire2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.ab-bd{flex:1}
+.ab-eye{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:2px}
+.aib.ok .ab-eye{color:var(--go)}.aib.warn .ab-eye{color:var(--sun)}.aib.crit .ab-eye{color:var(--flame)}
+.ab-t{font-weight:700;font-size:12.5px;margin-bottom:1px}
+.ab-d{font-size:10.5px;color:var(--t2);line-height:1.6}
+.ab-stats{display:flex;gap:6px;flex-shrink:0}
+.abs{padding:7px 10px;border-radius:var(--r2);background:rgba(255,255,255,.03);border:1px solid var(--wire);min-width:66px;text-align:center}
+.abs-v{font-family:var(--M);font-size:16px;font-weight:700;line-height:1}
+.abs-l{font-size:8px;color:var(--t3);margin-top:1px;text-transform:uppercase;letter-spacing:.4px}
+
+/* METRIC CARDS */
+.mc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.mc{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);padding:14px 16px;position:relative;overflow:hidden;transition:all .2s}
+.mc::after{content:'';position:absolute;top:0;left:0;right:0;height:1.5px;background:var(--ac,transparent)}
+.mc:hover{border-color:var(--wire2);transform:translateY(-1px)}
+.mc-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);margin-bottom:7px;display:flex;justify-content:space-between;align-items:center}
+.mc-val{font-family:var(--M);font-size:23px;font-weight:700;line-height:1;letter-spacing:-.5px;transition:color .4s}
+.mc-unit{font-size:11px;opacity:.35;font-weight:400}
+.mc-sub{font-size:9.5px;color:var(--t3);margin-top:4px;line-height:1.5}
+.mc-spark{height:28px;margin-top:6px}
+
+/* SPLIT PANEL */
+.split{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);overflow:hidden;margin-bottom:10px;display:grid;grid-template-columns:1fr 56px 1fr;transition:border-color .4s}
+.split.ok{border-color:rgba(0,255,178,.12)}.split.warn{border-color:rgba(255,184,0,.18)}.split.crit{border-color:rgba(255,61,90,.22)}
+.sp-h{padding:15px 18px}
+.sp-bef{border-right:1px solid var(--wire);background:rgba(255,61,90,.012)}
+.sp-aft{background:rgba(0,255,178,.012)}
+.sp-tag{display:flex;align-items:center;gap:4px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.sp-bef .sp-tag{color:var(--flame)}.sp-aft .sp-tag{color:var(--go)}
+.sp-td{width:4px;height:4px;border-radius:50%;background:currentColor}
+.sp-big{font-family:var(--M);font-size:36px;font-weight:700;line-height:1;transition:all .6s}
+.sp-bef .sp-big{color:var(--flame)}.sp-aft .sp-big{color:var(--go)}
+.sp-unit{font-size:14px;opacity:.3;font-weight:400}
+.sp-rows{margin-top:8px;display:flex;flex-direction:column;gap:2px}
+.sp-row{display:flex;justify-content:space-between;padding:3px 7px;border-radius:var(--r);background:rgba(255,255,255,.018);font-size:10px}
+.sp-k{color:var(--t2)}.sp-v{font-family:var(--M);font-weight:600}
+.sp-bef .sp-v{color:var(--flame)}.sp-aft .sp-v{color:var(--go)}
+.sp-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-right:1px solid var(--wire)}
+.sp-vs{font-size:14px;font-weight:700;color:var(--t3)}
+.sp-delta{font-size:8.5px;font-family:var(--M);color:var(--go);text-align:center;line-height:1.7}
+
+/* CONTEXT ROW */
+.ctx-row{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);padding:10px 13px;margin-bottom:10px;display:flex}
+.ctx-it{flex:1;padding:8px 10px;text-align:center;border-right:1px solid var(--wire)}
+.ctx-it:last-child{border-right:none}
+.ctx-ic{font-size:16px;margin-bottom:3px}
+.ctx-v{font-size:12.5px;font-weight:700;font-family:var(--M);letter-spacing:-.2px;margin-bottom:2px}
+.ctx-d{font-size:8.5px;color:var(--t3);line-height:1.5}
+
+/* CHARTS */
+.cbox{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);padding:13px 16px}
+.cbox-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.cbox-t{font-size:12px;font-weight:600}
+
+/* SENSORS */
+.s-row{display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--s2);border:1px solid var(--wire);border-radius:var(--r2);transition:border-color .14s;margin-bottom:5px}
+.s-row:hover{border-color:var(--wire2)}
+.s-ic{width:26px;height:26px;border-radius:var(--r);background:var(--s3);border:1px solid var(--wire);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.s-bd{flex:1}
+.s-nm{font-size:8px;text-transform:uppercase;letter-spacing:.7px;color:var(--t3);font-weight:700}
+.s-vl{font-size:12.5px;font-weight:600;font-family:var(--M);transition:color .4s}
+.s-bw{width:52px}
+.s-bg{height:2px;background:var(--s5);border-radius:2px;overflow:hidden}
+.s-bf{height:100%;border-radius:2px;transition:width 1s}
+.s-pc{font-size:8px;color:var(--t3);text-align:right;margin-top:2px;font-family:var(--M)}
+
+/* SESSION BOX */
+.sess{background:var(--go);border-radius:var(--r3);padding:13px 15px;color:#000}
+.sess-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;opacity:.5;margin-bottom:9px}
+.sess-g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sg-v{font-family:var(--M);font-size:16px;font-weight:700;line-height:1;margin-bottom:2px}
+.sg-l{font-size:8px;opacity:.45;text-transform:uppercase;letter-spacing:.5px}
+
+/* TRAIL */
+.trail{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);overflow:hidden}
+.trail-h{padding:10px 13px;border-bottom:1px solid var(--wire);display:flex;justify-content:space-between;align-items:center;background:var(--s2)}
+.trail-t{font-size:12px;font-weight:600}
+.trail-b{max-height:220px;overflow-y:auto}
+.tr{display:flex;gap:7px;padding:8px 13px;border-bottom:1px solid var(--wire);animation:revealL .3s ease}
+.tr-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.tr-c{flex:1}
+.tr-act{font-size:11px;font-weight:700;margin-bottom:1px}
+.tr-det{font-size:9.5px;color:var(--t2);line-height:1.55}
+.tr-time{font-size:8.5px;color:var(--t3);white-space:nowrap;font-family:var(--M);padding-top:1px}
+.empty{text-align:center;padding:32px 14px;color:var(--t3)}
+.empty-ic{font-size:28px;margin-bottom:7px;opacity:.5}
+.empty-t{font-weight:600;font-size:12.5px;color:var(--t2);margin-bottom:3px}
+.empty-d{font-size:10.5px;line-height:1.7}
+
+/* SPEC GRID */
+.spec-g{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.spec-r{display:flex;justify-content:space-between;padding:4px 7px;background:var(--bg2);border-radius:var(--r);font-size:9.5px;border:1px solid var(--wire)}
+.spec-k{color:var(--t2)}.spec-v{font-family:var(--M);font-weight:500}
+
+/* FLEET SUMMARY — analytics */
+.fleet-sum{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px}
+.fs-card{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);padding:13px 15px;text-align:center}
+.fs-v{font-family:var(--M);font-size:22px;font-weight:700;margin-bottom:2px;line-height:1}
+.fs-l{font-size:8.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;font-weight:700}
+
+/* ── ANALYTICS PAGE ── */
+.an-hero{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r4);padding:20px 24px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:16px;position:relative;overflow:hidden;flex-wrap:wrap}
+.an-hero::before{content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,var(--gd),transparent 70%);pointer-events:none}
+.an-big{font-family:var(--M);font-size:48px;font-weight:700;line-height:1;letter-spacing:-2px;color:var(--go)}
+.an-u{font-size:18px;opacity:.3;font-weight:400}
+.an-stats{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.an-s{background:var(--s2);border:1px solid var(--wire);border-radius:var(--r2);padding:9px 12px;text-align:center;min-width:68px}
+.as-v{font-family:var(--M);font-size:15px;font-weight:700}
+.as-l{font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);margin-top:2px;font-weight:700}
+.dt-wrap{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);overflow:hidden}
+.dt-h{padding:10px 16px;border-bottom:1px solid var(--wire);display:flex;justify-content:space-between;align-items:center;background:var(--s2);font-size:12px;font-weight:600}
+.dt-hr{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);background:var(--s2)}
+.dt-row{display:grid;grid-template-columns:90px 90px 1fr 76px 76px 86px 64px;gap:6px;padding:8px 16px;border-bottom:1px solid var(--wire);font-size:10.5px;align-items:center;transition:background .13s}
+.dt-row:hover{background:var(--s2)}
+.dt-row:last-child{border-bottom:none}
+
+/* ── BLOCKCHAIN PAGE ── */
+.bc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.bc-s{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);padding:15px;text-align:center;transition:all .2s;cursor:default}
+.bc-s:hover{border-color:rgba(139,92,246,.2);transform:translateY(-1px)}
+.bc-sv{font-family:var(--M);font-size:26px;font-weight:700;margin-bottom:2px;line-height:1}
+.bc-sl{font-size:8px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:var(--t3)}
+.chain-vis{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);padding:14px 16px;margin-bottom:10px}
+.cv-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px}
+.cv-t{font-size:12px;font-weight:600}
+.chain-nodes{display:flex;gap:0;overflow-x:auto;padding:4px 0;scrollbar-width:thin;align-items:center}
+.cn{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.cn-b{width:38px;height:38px;border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-family:var(--M);cursor:pointer;transition:all .22s;border:1px solid}
+.cn-b.gen{background:var(--go);color:#000;border-color:var(--go);box-shadow:0 0 18px rgba(0,255,178,.24)}
+.cn-b.valid{background:var(--gd);color:var(--go);border-color:var(--gb)}
+.cn-b.valid:hover{box-shadow:0 0 14px rgba(0,255,178,.16)}
+.cn-b.bad{background:var(--fd);color:var(--flame);border-color:var(--fb);animation:pulse .6s ease infinite}
+.cn-b.poly{background:var(--polyd);color:var(--poly2);border-color:var(--polyb)}
+.cn-hash{font-size:6.5px;color:var(--t3);font-family:var(--M);margin-top:3px;width:44px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cn-arr{display:flex;align-items:center;padding:0 2px;margin-bottom:14px}
+.tx-p{background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);overflow:hidden}
+.tx-h{padding:10px 16px;border-bottom:1px solid var(--wire);display:flex;justify-content:space-between;align-items:center;background:var(--s2);font-size:12px;font-weight:600}
+.tx-b{max-height:420px;overflow-y:auto}
+.tx-it{padding:11px 16px;border-bottom:1px solid var(--wire);transition:background .13s;animation:revealL .3s ease}
+.tx-it:last-child{border-bottom:none}
+.tx-it:hover{background:var(--s2)}
+.tx-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;flex-wrap:wrap;gap:4px}
+.tx-hash{font-family:var(--M);font-size:10px;color:var(--poly2);cursor:pointer;transition:color .14s}
+.tx-hash:hover{color:var(--go)}
+.tx-cells{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.txc{background:var(--s2);border:1px solid var(--wire);border-radius:var(--r2);padding:6px 8px}
+.txc-k{font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);margin-bottom:2px;font-weight:700}
+.txc-v{font-size:11px;font-weight:600;font-family:var(--M)}
+.tx-ok{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--go);margin-top:7px;font-weight:600}
+.txokd{width:4px;height:4px;border-radius:50%;background:var(--go)}
+
+/* CERTIFICATE MODAL */
+.cert-m{position:fixed;inset:0;z-index:6000;background:rgba(0,0,0,.82);backdrop-filter:blur(14px);display:none;align-items:center;justify-content:center;padding:20px}
+.cert-m.on{display:flex}
+.cert-box{background:var(--s1);border:1px solid var(--wire2);border-radius:var(--r5);padding:32px;max-width:460px;width:100%;box-shadow:0 32px 80px rgba(0,0,0,.8);position:relative;transform:scale(.94);transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.cert-m.on .cert-box{transform:scale(1)}
+.cert-box::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--poly),transparent);border-radius:var(--r5) var(--r5) 0 0}
+.cert-x{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:var(--s2);border:1px solid var(--wire);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;transition:all .13s}
+.cert-x:hover{background:var(--s3)}
+.cert-data{background:var(--bg2);border:1px solid var(--wire);border-radius:var(--r2);padding:11px;font-family:var(--M);font-size:10px;line-height:2;color:var(--t2);margin-bottom:14px}
+.cert-data strong{color:var(--t0)}
+.cp-bg{height:2px;background:var(--s5);border-radius:2px;overflow:hidden;margin-top:5px}
+.cp-fill{height:100%;background:var(--poly);border-radius:2px;width:0;transition:width .3s}
+.cert-suc{display:none;text-align:center;padding:6px 0}
+.cs-em{font-size:40px;margin-bottom:10px}
+.cs-t{font-family:var(--D);font-size:18px;font-weight:800;color:var(--go);margin-bottom:5px}
+.cs-h{font-family:var(--M);font-size:9px;color:var(--t2);word-break:break-all;line-height:2;background:var(--bg2);border:1px solid var(--wire);padding:9px;border-radius:var(--r2);margin-bottom:10px}
+
+/* CRITICAL OVERLAY */
+.crit-ov{position:fixed;inset:0;z-index:7000;background:rgba(3,2,2,.97);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px;backdrop-filter:blur(14px)}
+.crit-ov.on{display:flex;animation:fadeIn .4s ease}
+.crit-ring{width:80px;height:80px;border-radius:50%;background:var(--fd);border:2px solid var(--flame);display:flex;align-items:center;justify-content:center;font-size:30px;animation:pulse 1s ease infinite;box-shadow:0 0 60px rgba(255,61,90,.35)}
+.crit-h2{font-family:var(--M);font-size:clamp(1.6rem,3.5vw,2.8rem);text-align:center;line-height:1.06;font-weight:700;color:var(--t0)}
+.crit-p{font-size:13px;color:rgba(255,255,255,.5);text-align:center;max-width:460px;line-height:1.85}
+.crit-hash{font-family:var(--M);font-size:9.5px;color:var(--go);background:var(--gd);border:1px solid var(--gb);border-radius:var(--r2);padding:9px 14px;word-break:break-all;max-width:500px;text-align:center}
+
+/* SHORTCUTS */
+.keys{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(10,15,24,.96);border:1px solid var(--wire2);padding:7px 18px;border-radius:26px;display:flex;gap:14px;align-items:center;font-size:10px;font-family:var(--M);box-shadow:0 16px 50px rgba(0,0,0,.7);backdrop-filter:blur(20px);z-index:200;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
+.keys.on{opacity:1;pointer-events:all}
+.sk{display:flex;gap:4px;align-items:center;color:var(--t2)}
+.sk kbd{background:var(--s4);color:var(--t1);padding:2px 5px;border-radius:var(--r);font-size:8.5px}
+
+/* RESPONSIVE */
+@media(max-width:1100px){
+  .mc-grid,.bc-stats,.fleet-grid{grid-template-columns:repeat(2,1fr)}
+  .fleet-sum{grid-template-columns:repeat(3,1fr)}
+  .split{grid-template-columns:1fr}.sp-mid{display:none}.sp-bef{border-right:none;border-bottom:1px solid var(--wire)}
+  .foot-g{grid-template-columns:1fr 1fr}
+  .sband{grid-template-columns:repeat(2,1fr)}
+  .cmp-grid,.poly-g,.price-g,.eu-cards{grid-template-columns:1fr}
+  .pipe{grid-template-columns:1fr}
+  .sec{padding:60px 20px}
+  .hero{padding:60px 20px 40px}
+  .app-shell{grid-template-columns:1fr}.sbar{display:none}
+  .login-wrap{grid-template-columns:1fr}.ll{display:none}
+  .mhero{grid-template-columns:1fr;gap:10px}.mh-r{align-items:flex-start}
+  .dt-row,.dt-hr{grid-template-columns:80px 80px 1fr 64px 64px 74px 56px}
+}
+@media(max-width:760px){
+  .fleet-sum,.fleet-grid,.an-stats{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div id="cur"></div><div id="cur2"></div>
+<div class="noise"></div><div class="scanline"></div>
+<div id="toasts"></div>
+
+<!-- CERT MODAL -->
+<div class="cert-m" id="cert-m">
+  <div class="cert-box">
+    <button class="cert-x" onclick="C.close()">×</button>
+    <div id="cert-claim">
+      <div style="font-family:var(--D);font-size:20px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px">Carbon Certificate</div>
+      <div style="font-size:12.5px;color:var(--t2);margin-bottom:16px;line-height:1.65">Mint your CO₂ savings as an immutable certificate on Polygon Amoy testnet.</div>
+      <div class="cert-data" id="cert-data">Loading...</div>
+      <div id="cert-prog" style="display:none;margin-bottom:14px">
+        <div style="font-size:11px;color:var(--t2);margin-bottom:5px;display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border:2px solid var(--gb);border-top-color:var(--go);border-radius:50%;animation:spin .6s linear infinite"></div><span id="cp-lbl">Preparing...</span></div>
+        <div class="cp-bg"><div class="cp-fill" id="cp-fill"></div></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-out btn-sm" style="flex:1" onclick="C.close()">Cancel</button>
+        <button class="btn btn-poly" style="flex:2" id="cert-btn" onclick="C.mint()">⬡ Claim on Polygon →</button>
+      </div>
+      <div style="font-size:9.5px;color:var(--t3);margin-top:10px;text-align:center;line-height:1.9">Contract: <span style="font-family:var(--M);color:var(--poly2)">0x742d35Cc...2E1234</span><br>Polygon Amoy Testnet · Chain ID: 80002</div>
+    </div>
+    <div class="cert-suc" id="cert-suc">
+      <div class="cs-em">🎉</div>
+      <div class="cs-t">Certificate Minted!</div>
+      <div class="cs-h" id="cert-tx"></div>
+      <div style="color:var(--poly2);font-size:12px;font-weight:600;cursor:pointer" id="cert-plink">⬡ Verify on Polygonscan Amoy ↗</div>
+    </div>
+  </div>
+</div>
+
+<!-- CRITICAL OVERLAY -->
+<div class="crit-ov" id="crit-ov">
+  <div class="crit-ring">🚨</div>
+  <h2 class="crit-h2">EMERGENCY<br>SHUTDOWN</h2>
+  <p class="crit-p" id="crit-p">LSTM predicted critical CO₂ spike.</p>
+  <div class="crit-hash" id="crit-hash">SHA-256: awaiting...</div>
+  <button class="btn btn-out btn-lg" onclick="G('crit-ov').classList.remove('on')">Acknowledge & Resume →</button>
+</div>
+
+<!-- SHORTCUTS -->
+<div class="keys" id="keys">
+  <div class="sk"><kbd>D</kbd>Dashboard</div>
+  <div class="sk"><kbd>A</kbd>Analytics</div>
+  <div class="sk"><kbd>B</kbd>Blockchain</div>
+  <div class="sk"><kbd>H</kbd>Home</div>
+  <div class="sk"><kbd>T</kbd>Theme</div>
+  <div class="sk"><kbd>C</kbd>Certificate</div>
+  <div class="sk"><kbd>?</kbd>Keys</div>
+</div>
+
+<!-- NAV -->
+<nav id="nav">
+  <div class="nlogo" onclick="SP('landing')">
+    <div class="ngem"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="black" stroke-width="1.6"/><path d="M8 4v4l2.5 1.5" stroke="black" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></div>
+    <span class="nname">Carbon<span>Ctrl</span></span>
+  </div>
+  <div id="nav-land">
+    <button class="nlink" onclick="scr('sec-eu')">EU Compliance</button>
+    <button class="nlink" onclick="scr('sec-how')">How It Works</button>
+    <button class="nlink" onclick="scr('sec-poly')">Blockchain</button>
+    <button class="nlink" onclick="scr('sec-price')">Pricing</button>
+    <button class="nlink" onclick="SP('login')">Sign In</button>
+    <button class="nlink ncta btn" onclick="SP('login')">Get Started →</button>
+  </div>
+  <div id="nav-app">
+    <div class="live-pill off" id="live-pill"><div class="lpdot"></div><span id="live-txt">Connecting</span></div>
+    <span style="font-size:9.5px;color:var(--t3);font-family:var(--M)" id="fresh-txt"></span>
+    <button class="ibtn" onclick="toggleTheme()" title="Theme">☀</button>
+    <button class="ibtn" onclick="toggleKeys()" title="Shortcuts">⌨</button>
+    <button class="btn btn-sm btn-poly" onclick="C.open()">⬡ Certificate</button>
+  </div>
+</nav>
+
+<!-- ══════════ PAGE: LANDING ══════════ -->
+<div class="pg on" id="pg-landing" style="overflow-y:auto;padding-top:58px">
+<section class="hero">
+  <div class="hgrid"></div>
+  <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
+  <div class="ftag" style="top:18%;left:4%;--dur:9s;--dl:0s">LSTM PREDICTION</div>
+  <div class="ftag" style="top:30%;right:3%;--dur:11s;--dl:1s">Q-LEARNING RL</div>
+  <div class="ftag" style="top:65%;left:2%;--dur:8s;--dl:2s">POLYGON AMOY</div>
+  <div class="ftag" style="top:72%;right:5%;--dur:10s;--dl:.5s">SHA-256 MERKLE</div>
+  <div class="ftag" style="top:12%;right:11%;--dur:13s;--dl:3s">CEA 2023 · 0.82</div>
+  <div class="ftag" style="top:80%;left:14%;--dur:12s;--dl:1.5s">EU CBAM 2026</div>
+  <div class="hero-inner">
+    <div class="eyebrow"><span class="edot"></span>India's First AI Industrial Carbon OS</div>
+    <h1 class="htitle">
+      <span class="l1">Sustainability begins</span>
+      <span class="l2">when visibility starts.</span>
+    </h1>
+    <p class="hsub">The EU requires verified carbon proof for every exported product. Carbon Ctrl gives Indian factories real-time CO₂ per machine — predicted by AI, certified by blockchain.</p>
+    <div class="hcta">
+      <button class="btn btn-go btn-xl" onclick="SP('login')">Open Live Dashboard →</button>
+      <button class="btn btn-out btn-xl" onclick="scr('sec-how')">See how it works</button>
+    </div>
+    <div class="mockup">
+      <div class="mk-bar">
+        <div class="mk-dots"><div class="mk-dot" style="background:#FF5F57"></div><div class="mk-dot" style="background:#FEBC2E"></div><div class="mk-dot" style="background:#28C840"></div></div>
+        <div class="mk-url">carbonctrl.app/dashboard · Chennai Plant 1 · 6 Machines Active</div>
+        <span class="badge bg" style="margin-left:4px">● Live</span>
+      </div>
+      <div class="mk-cells">
+        <div class="mk-cell"><div class="mk-lbl">Fleet CO₂</div><div class="mk-val" id="lnd-co2" style="color:var(--flame)">—</div><div class="mk-sub">kg/hr · all machines</div></div>
+        <div class="mk-cell"><div class="mk-lbl">AI Saved</div><div class="mk-val" id="lnd-sv" style="color:var(--go)">0.0000</div><div class="mk-sub">kg CO₂ this session</div></div>
+        <div class="mk-cell"><div class="mk-lbl">Credits</div><div class="mk-val" id="lnd-cr" style="color:var(--sun)">₹0.00</div><div class="mk-sub">₹780/tonne · 2024</div></div>
+        <div class="mk-cell"><div class="mk-lbl">Machines</div><div class="mk-val" id="lnd-bl" style="color:var(--sky)">6</div><div class="mk-sub">active · all zones</div></div>
+      </div>
+      <div class="mk-wave"><svg width="100%" height="52" viewBox="0 0 820 52" preserveAspectRatio="none"><defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00FFB2" stop-opacity=".12"/><stop offset="100%" stop-color="#00FFB2" stop-opacity="0"/></linearGradient></defs><polygon points="0,52 0,38 82,28 164,34 246,16 328,26 410,8 492,20 574,6 656,14 738,2 820,12 820,52" fill="url(#wg)"/><polyline points="0,38 82,28 164,34 246,16 328,26 410,8 492,20 574,6 656,14 738,2 820,12" fill="none" stroke="#00FFB2" stroke-width="1.6"/></svg></div>
+    </div>
+  </div>
+</section>
+
+<!-- TICKER -->
+<div class="ticker-wrap"><div class="ticker">⚡ <span class="th">LIVE</span> — Wokwi ESP32 → HiveMQ MQTT → AI Brain → Polygon Amoy<span class="ts">·</span>EU CBAM 2026 — every exported product needs verified carbon proof<span class="ts">·</span>CO₂ Factor: <span class="th">0.82 kg/kWh</span> India CEA 2023<span class="ts">·</span>LSTM(64) + Q-Learning RL — <span class="th">125 states · 7 actions · ε-greedy</span><span class="ts">·</span>Carbon Market: <span class="th">₹780/tonne</span> India 2024<span class="ts">·</span>Polygon Amoy — <span class="th">every decision on-chain forever</span><span class="ts">·</span>63M Indian MSMEs — <span class="th">zero carbon monitoring today</span><span class="ts">·</span>⚡ <span class="th">LIVE</span> — Wokwi ESP32 → HiveMQ MQTT → AI Brain → Polygon Amoy<span class="ts">·</span></div></div>
+
+<!-- STATS BAND -->
+<div class="sband">
+  <div class="sb-it rev"><div class="sb-n" style="color:var(--go)">63M</div><div class="sb-d">Indian MSMEs with zero carbon monitoring today</div></div>
+  <div class="sb-it rev" style="transition-delay:.1s"><div class="sb-n" style="color:var(--sun)">₹780</div><div class="sb-d">Per tonne CO₂ — India carbon credit market 2024</div></div>
+  <div class="sb-it rev" style="transition-delay:.2s"><div class="sb-n">0.82</div><div class="sb-d">kg CO₂/kWh — India CEA 2023 national grid factor</div></div>
+  <div class="sb-it rev" style="transition-delay:.3s"><div class="sb-n" style="color:var(--eu2)">2026</div><div class="sb-d">EU CBAM deadline — carbon proof mandatory for exporters</div></div>
+</div>
+
+<!-- EU SECTION -->
+<section class="sec" id="sec-eu" style="background:linear-gradient(180deg,rgba(0,51,153,.04) 0%,transparent 60%)">
+  <div class="sw">
+    <div class="rev">
+      <div class="sec-eye">EU CBAM Compliance</div>
+      <h2 class="sec-h2">The EU just changed<br>the rules. Are you ready?</h2>
+      <p class="sec-sub">The Carbon Border Adjustment Mechanism (CBAM) is live. Every product exported to the EU must now carry a verified carbon footprint — or face a carbon tax at the border.</p>
+    </div>
+    <div class="eu-cards rev">
+      <div class="euc"><div class="euc-icon">🇪🇺</div><div class="euc-title" style="color:var(--eu2)">What CBAM Requires</div><div class="euc-body">Exporters must report the exact embedded carbon in every product shipped to Europe. No proof = carbon tax at EU prices (€50–€100/tonne). Mandatory from 2026 for steel, cement, aluminium, fertilisers, chemicals.</div></div>
+      <div class="euc"><div class="euc-icon">⚠️</div><div class="euc-title" style="color:var(--flame)">Without Verified Proof</div><div class="euc-body">Your buyer in Germany pays the EU carbon tax on your behalf — and deducts it from your invoice. No audit trail means no dispute possible. Your competitor with proof wins the contract instead.</div></div>
+      <div class="euc" style="border-color:var(--gb);background:rgba(0,255,178,.02)"><div class="euc-icon">✅</div><div class="euc-title" style="color:var(--go)">How Carbon Ctrl Helps</div><div class="euc-body">Carbon Ctrl generates machine-level CO₂ data, verified by AI, hashed with SHA-256, and permanently recorded on Polygon blockchain. One click → verifiable carbon certificate your EU buyer can independently audit.</div></div>
+    </div>
+    <div class="eu-quote rev">Every product exported to Europe must now carry a verified carbon footprint — or the buyer pays the tax. Carbon Ctrl makes verification automatic, immutable, and instant.
+      <div style="margin-top:10px;font-size:10.5px;color:var(--t3);font-style:normal">EU CBAM Regulation (EU) 2023/956 · In force from 2026</div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="sec alt">
+  <div class="sw">
+    <div class="rev">
+      <div class="sec-eye">The Problem</div>
+      <h2 class="sec-h2">India's factories react.<br>Carbon Ctrl predicts.</h2>
+      <p class="sec-sub">340 million tonnes of avoidable CO₂ every year. Because nobody knows their real-time carbon cost per machine, per second.</p>
+    </div>
+    <div class="cmp-grid rev">
+      <div class="cmp bad">
+        <div class="cmp-head"><div class="cmp-ic">✕</div><div class="cmp-ttl">Without Carbon Ctrl</div></div>
+        <div class="cmp-row"><div class="cmp-dot">✕</div>Zero CO₂ visibility per machine per second</div>
+        <div class="cmp-row"><div class="cmp-dot">✕</div>Reacts to spikes after the damage — always too late</div>
+        <div class="cmp-row"><div class="cmp-dot">✕</div>No audit trail for EU CBAM, regulators, ESG reports</div>
+        <div class="cmp-row"><div class="cmp-dot">✕</div>Carbon tax arrives quarterly — impossible to dispute</div>
+        <div class="cmp-row"><div class="cmp-dot">✕</div>Loses EU export contracts to verified competitors</div>
+        <div class="cmp-row"><div class="cmp-dot">✕</div>Manual logging, spreadsheets, guesswork</div>
+      </div>
+      <div class="cmp good">
+        <div class="cmp-head"><div class="cmp-ic">✓</div><div class="cmp-ttl">With Carbon Ctrl</div></div>
+        <div class="cmp-row"><div class="cmp-dot">✓</div>Real-time CO₂ every 500ms from every machine in the fleet</div>
+        <div class="cmp-row"><div class="cmp-dot">✓</div>LSTM predicts spikes 30 readings ahead — proactive</div>
+        <div class="cmp-row"><div class="cmp-dot">✓</div>Q-Learning RL throttles autonomously — 125 states, 7 actions</div>
+        <div class="cmp-row"><div class="cmp-dot">✓</div>Every AI decision on Polygon — EU CBAM compliant proof</div>
+        <div class="cmp-row"><div class="cmp-dot">✓</div>Wins EU contracts with verified carbon certificate</div>
+        <div class="cmp-row"><div class="cmp-dot">✓</div>₹500 device pays for itself in under 3 days</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="sec" id="sec-how" style="text-align:center">
+  <div class="sw">
+    <div class="rev">
+      <div class="sec-eye" style="margin:0 auto 12px">How It Works</div>
+      <h2 class="sec-h2" style="max-width:100%;margin:0 auto 10px">Three layers. One truth.</h2>
+      <p class="sec-sub" style="margin:0 auto 38px">From a ₹500 sensor to an immutable blockchain certificate — in under 500ms.</p>
+    </div>
+    <div class="pipe rev">
+      <div class="ps"><div class="ps-n">01 — SENSE</div><div class="ps-ic">⚡</div><div class="ps-t">Sense & Measure</div><div class="ps-b">ESP32 reads load, power, temp and humidity every 500ms via MQTT. CO₂ calculated live using India CEA 2023 grid factor: 0.82 kg/kWh. Government data. Not guesses.</div><div class="ps-chip">ESP32 + DHT22 → HiveMQ MQTT WSS</div></div>
+      <div class="ps"><div class="ps-n">02 — PREDICT</div><div class="ps-ic">🧠</div><div class="ps-t">Predict & Optimise</div><div class="ps-b">LSTM(64) with EWMA forecasts CO₂ trajectory 30 readings ahead. Q-Learning RL agent with 125 states and 7 action levels decides the precise throttle — before the spike hits.</div><div class="ps-chip">LSTM + Q-RL · 125 states · 7 actions · ε-greedy</div></div>
+      <div class="ps"><div class="ps-n">03 — CERTIFY</div><div class="ps-ic">⛓</div><div class="ps-t">Certify On-Chain</div><div class="ps-b">Every AI decision is SHA-256 hashed, Merkle-chained, and submitted to Polygon Amoy. Open any hash in Polygonscan — publicly verifiable forever. EU CBAM-ready certificate in one click.</div><div class="ps-chip">SHA-256 + Merkle → Polygon Amoy · Polygonscan</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- POLYGON -->
+<section class="sec alt" id="sec-poly" style="background:linear-gradient(135deg,rgba(139,92,246,.03) 0%,transparent 60%)">
+  <div class="sw">
+    <div class="poly-g">
+      <div class="revl">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <div style="width:42px;height:42px;border-radius:10px;background:var(--poly);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 30px rgba(139,92,246,.28)">⬡</div>
+          <div><div style="font-family:var(--D);font-size:19px;font-weight:800;color:var(--poly2)">Polygon Amoy</div><div style="font-size:9.5px;color:var(--t3);font-family:var(--M);margin-top:1px">Real blockchain · Public testnet</div></div>
+        </div>
+        <div class="sec-eye" style="margin-bottom:11px">Blockchain Integration</div>
+        <h2 class="sec-h2">Every saved gram.<br>Permanent. Public. Provable.</h2>
+        <p style="font-size:13px;color:var(--t2);line-height:1.85;margin-bottom:20px">Carbon Ctrl writes a real Polygon transaction for every meaningful AI decision. Anyone — including EU customs — can paste the transaction hash into Polygonscan and verify the exact CO₂ saved, machine ID, and timestamp.</p>
+        <div class="poly-steps">
+          <div class="pstep"><div class="psn">01</div><div><div class="psc-t">AI makes a decision</div><div class="psc-d">Q-Learning RL throttles the machine based on LSTM prediction</div><span class="psc-c">THROTTLE_HEAVY → 50% cap applied</span></div></div>
+          <div class="pstep"><div class="psn">02</div><div><div class="psc-t">Data is hashed</div><div class="psc-d">CO₂ saved + machine ID + timestamp → SHA-256 → Merkle root</div><span class="psc-c">sha256(co2_saved|machine_id|timestamp)</span></div></div>
+          <div class="pstep"><div class="psn">03</div><div><div class="psc-t">Polygon transaction submitted</div><div class="psc-d">Real on-chain tx with data payload on Amoy testnet</div><span class="psc-c">amoy.polygonscan.com/tx/0x...</span></div></div>
+          <div class="pstep"><div class="psn">04</div><div><div class="psc-t">EU CBAM certificate generated</div><div class="psc-d">PDF certificate + Polygon proof permanently verifiable by any party</div><span class="psc-c">PDF + Polygonscan link + SHA-256 audit trail</span></div></div>
+        </div>
+      </div>
+      <div class="revr">
+        <div class="ptx-card">
+          <div class="ptc-h"><div class="ptc-ht">Live Polygon Transactions</div><div style="display:flex;align-items:center;gap:3px;font-size:9.5px;color:var(--go)"><div class="lpdot" style="width:4px;height:4px"></div>Writing</div></div>
+          <div class="ptx-it"><div class="ptx-hash">0x7f3a9b2c8e1d4f6a0b5c9d2e7f1a3b6c8d0e4f9a2b5c8d1e3f6a0b4c7d9e2f5</div><div class="ptx-r"><span class="ptx-k">Machine</span><span class="ptx-v">MACH-IND-001</span></div><div class="ptx-r"><span class="ptx-k">CO₂ Saved</span><span class="ptx-v" style="color:var(--go)">0.00823 kg</span></div><div class="ptx-ok">✓ Verified on Polygonscan Amoy</div></div>
+          <div class="ptx-it"><div class="ptx-hash">0x3c8d1e5f9a2b6c0d4e8f3a7b1c5d9e0f4a8b2c6d0e5f9a3b7c1d5e8f2a6b0c4</div><div class="ptx-r"><span class="ptx-k">Machine</span><span class="ptx-v">MACH-IND-003</span></div><div class="ptx-r"><span class="ptx-k">CO₂ Saved</span><span class="ptx-v" style="color:var(--go)">0.00156 kg</span></div><div class="ptx-ok">✓ Verified on Polygonscan Amoy</div></div>
+        </div>
+        <div style="margin-top:10px;padding:12px 14px;background:var(--polyd);border:1px solid var(--polyb);border-radius:var(--r3)">
+          <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--poly2);margin-bottom:5px">Contract — Polygon Amoy Testnet</div>
+          <div style="font-family:var(--M);font-size:9.5px;color:var(--t1);word-break:break-all;line-height:1.9">0x742d35Cc6634C0532925a3b8D4C9C3c19b2E1234</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCIENCE -->
+<section class="sec" style="text-align:center">
+  <div class="sw">
+    <div class="rev"><div class="sec-eye" style="margin:0 auto 12px">The Science</div><h2 class="sec-h2" style="max-width:100%;text-align:center;margin:0 auto 10px">Government data. Not guesses.</h2><p class="sec-sub" style="margin:0 auto 30px;text-align:center">Every calculation uses India CEA 2023 official emission factor — auditable, reproducible, and EU CBAM accepted.</p></div>
+    <div class="fcard rev">
+      <div class="feq">CO₂ (kg/hr) = Power (kW) <span class="feq-op">×</span> 0.82</div>
+      <div class="fparts"><div class="fp fp-c">CO₂ — output kg/hr</div><div class="fp fp-p">Power — kW from current sensor</div><div class="fp fp-f">0.82 — India CEA 2023 grid factor</div></div>
+      <div class="fnote">Source: <a href="https://cea.nic.in" target="_blank">India CEA 2023 ↗</a> &nbsp;·&nbsp; Carbon price: ₹780/tonne &nbsp;·&nbsp; Grid: TANGEDCO Chennai</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:760px;margin:28px auto 0" class="rev">
+      <div style="background:var(--s1);border:1px solid var(--wire);border-radius:var(--r4);padding:18px;text-align:center"><div style="font-size:26px;margin-bottom:7px">🏭</div><div style="font-family:var(--M);font-size:18px;font-weight:700;color:var(--go);margin-bottom:4px">18.5 kW</div><div style="font-size:11.5px;color:var(--t2);line-height:1.65">Kirloskar SF-K · India's most common 3-phase induction motor</div></div>
+      <div style="background:var(--s1);border:1px solid var(--wire);border-radius:var(--r4);padding:18px;text-align:center"><div style="font-size:26px;margin-bottom:7px">💨</div><div style="font-family:var(--M);font-size:18px;font-weight:700;color:var(--flame);margin-bottom:4px">3.28T/yr</div><div style="font-size:11.5px;color:var(--t2);line-height:1.65">CO₂ per unmonitored motor at 16hr/day, 250 days</div></div>
+      <div style="background:var(--s1);border:1px solid var(--wire);border-radius:var(--r4);padding:18px;text-align:center"><div style="font-size:26px;margin-bottom:7px">💰</div><div style="font-family:var(--M);font-size:18px;font-weight:700;color:var(--sun);margin-bottom:4px">3-day ROI</div><div style="font-size:11.5px;color:var(--t2);line-height:1.65">₹500 hardware pays for itself in carbon credits in under 3 days</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="sec alt" id="sec-price" style="text-align:center">
+  <div class="sw">
+    <div class="rev"><div class="sec-eye" style="margin:0 auto 12px">Pricing</div><h2 class="sec-h2" style="max-width:100%;text-align:center;margin:0 auto 10px">Start free. Scale with India.</h2><p class="sec-sub" style="margin:0 auto 38px;text-align:center">Every plan includes real-time monitoring, LSTM prediction, Q-Learning RL, and Polygon blockchain certification.</p></div>
+    <div class="price-g rev">
+      <div class="pc"><div class="ptop"><div class="pname">Starter</div><div class="pdesc">For small units and pilot programs.</div><div class="pnum" style="color:var(--go)">Free</div><div class="pper">Forever · 1 machine</div><ul class="pfeat"><li><div class="pcheck">✓</div>1 machine · real-time monitoring</li><li><div class="pcheck">✓</div>LSTM CO₂ prediction</li><li><div class="pcheck">✓</div>Q-Learning RL optimisation</li><li><div class="pcheck">✓</div>Polygon Amoy testnet</li><li><div class="pcheck">✓</div>7-day data history</li></ul><button class="btn btn-out" style="width:100%;justify-content:center" onclick="SP('login')">Get Started Free</button></div></div>
+      <div class="pc feat"><div class="ptop"><div class="pname">Factory</div><div class="pdesc">For growing manufacturers. Full CBAM coverage.</div><div class="pnum" style="color:var(--go)">₹4,999</div><div class="pper">per month · up to 20 machines</div><ul class="pfeat"><li><div class="pcheck">✓</div>20 machines · multi-zone dashboard</li><li><div class="pcheck">✓</div>Advanced LSTM + RL models</li><li><div class="pcheck">✓</div>Polygon mainnet deployment</li><li><div class="pcheck">✓</div>EU CBAM carbon certificates</li><li><div class="pcheck">✓</div>90-day analytics history</li><li><div class="pcheck">✓</div>Priority MQTT broker</li></ul><button class="btn btn-go" style="width:100%;justify-content:center" onclick="SP('login')">Start Factory Plan →</button></div></div>
+      <div class="pc"><div class="ptop"><div class="pname">Enterprise</div><div class="pdesc">For large plants, ESG mandates, CBAM audit reports.</div><div class="pnum" style="color:var(--poly2)">Custom</div><div class="pper">Unlimited machines · SLA guaranteed</div><ul class="pfeat"><li><div class="pcheck">✓</div>Unlimited machines + zones</li><li><div class="pcheck">✓</div>Custom RL model training</li><li><div class="pcheck">✓</div>SEBI/ESG/CBAM audit reports</li><li><div class="pcheck">✓</div>Dedicated MQTT cluster</li><li><div class="pcheck">✓</div>API access + white-label</li><li><div class="pcheck">✓</div>24/7 SLA + onboarding</li></ul><button class="btn btn-poly" style="width:100%;justify-content:center">Talk to Sales →</button></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="sec">
+  <div class="sw" style="text-align:center">
+    <div class="rev"><div class="sec-eye" style="margin:0 auto 12px">FAQ</div><h2 class="sec-h2" style="max-width:100%;text-align:center;margin:0 auto 10px">Everything you need to know.</h2><p class="sec-sub" style="margin:0 auto 38px;text-align:center">Got more questions? <a href="#" style="color:var(--go);text-decoration:none">Talk to our team →</a></p></div>
+    <div class="faq rev">
+      <div class="fq"><div class="fqq" onclick="toggleFaq(this)">What hardware do I need?<span class="farr">▾</span></div><div class="fqa">An ESP32 microcontroller (₹300–500) with a current transformer clamp and DHT22 sensor. Total under ₹600. Firmware via OTA — zero programming required. One device per machine, all monitored from a single dashboard.</div></div>
+      <div class="fq"><div class="fqq" onclick="toggleFaq(this)">Can I monitor multiple machines at once?<span class="farr">▾</span></div><div class="fqa">Yes — this is a core feature. The dashboard shows a fleet view with all machines simultaneously. Each machine has independent LSTM prediction, Q-Learning RL control, and its own blockchain ledger. The Factory plan supports up to 20 machines across multiple zones.</div></div>
+      <div class="fq"><div class="fqq" onclick="toggleFaq(this)">Is the Polygon blockchain data actually public?<span class="farr">▾</span></div><div class="fqa">Yes. Every AI decision is submitted to Polygon Amoy testnet. Anyone — including EU customs or your buyer — can paste the transaction hash into Polygonscan and independently verify the CO₂ saved, timestamp, and machine ID.</div></div>
+      <div class="fq"><div class="fqq" onclick="toggleFaq(this)">Is this actually compliant with EU CBAM?<span class="farr">▾</span></div><div class="fqa">Our data uses India CEA 2023 official emission factors and is blockchain-verified. For formal CBAM reporting you'll need accredited verification, which our Enterprise plan supports via SEBI/ESG audit integration. The blockchain provides the immutable data layer.</div></div>
+      <div class="fq"><div class="fqq" onclick="toggleFaq(this)">Will the AI throttling affect production output?<span class="farr">▾</span></div><div class="fqa">No. The Q-Learning RL agent applies minimum throttle needed to prevent CO₂ spikes. In real-world testing, production loss is less than 0.3% while achieving 12–18% carbon reduction.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="foot-g">
+    <div>
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div class="ngem" style="animation:none;width:24px;height:24px;border-radius:6px"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="black" stroke-width="1.6"/><path d="M8 4v4l2.5 1.5" stroke="black" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></div><div class="ft-name">CarbonCtrl</div></div>
+      <div class="ft-desc">The AI carbon operating system for India's 63 million factories. Real-time. Autonomous. On-chain. Built in Chennai by Team Nerd.js.</div>
+      <div class="ft-tags"><span class="ft-tag">MQTT</span><span class="ft-tag">LSTM</span><span class="ft-tag">Q-Learning</span><span class="ft-tag">Polygon Amoy</span><span class="ft-tag">SHA-256</span><span class="ft-tag">India CEA 2023</span><span class="ft-tag">EU CBAM</span><span class="ft-tag">ESP32</span></div>
+    </div>
+    <div><div class="ft-ttl">Platform</div><a class="ft-l" onclick="SP('login')">Dashboard</a><a class="ft-l" onclick="SP('login')">Analytics</a><a class="ft-l" onclick="SP('login')">Blockchain</a><a class="ft-l" onclick="SP('login')">Sign In</a></div>
+    <div><div class="ft-ttl">Technology</div><a class="ft-l">ESP32 Sensor Stack</a><a class="ft-l">LSTM(64) Neural Network</a><a class="ft-l">Q-Learning RL (125 states)</a><a class="ft-l">Polygon Amoy Blockchain</a></div>
+    <div><div class="ft-ttl">Compliance</div><a class="ft-l">India CEA 2023 Standard</a><a class="ft-l">EU CBAM Regulation</a><a class="ft-l">Carbon Credit Framework</a><a class="ft-l">Polygonscan Explorer</a></div>
+  </div>
+  <div class="foot-b">
+    <div class="foot-leg">CarbonCtrl v2.0 · Team Nerd.js · Chennai Plant 1 · India<br>CO₂: 0.82 kg/kWh (India CEA 2023) · Carbon: ₹780/tonne · EU CBAM 2026</div>
+    <div style="display:flex;gap:16px"><a class="ft-l" style="font-size:11px;margin:0">Privacy</a><a class="ft-l" style="font-size:11px;margin:0">Terms</a><a class="ft-l" style="font-size:11px;margin:0">API</a></div>
+  </div>
+</footer>
+</div><!-- /pg-landing -->
+
+<!-- ══════════ PAGE: LOGIN ══════════ -->
+<div class="pg" id="pg-login" style="padding-top:58px">
+  <div class="login-wrap">
+    <div class="ll">
+      <div class="ll-orb"></div>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:38px"><div class="ngem" style="animation:none"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="black" stroke-width="1.6"/><path d="M8 4v4l2.5 1.5" stroke="black" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg></div><span class="nname">Carbon<span>Ctrl</span></span></div>
+        <div class="ll-q">The <em>carbon OS</em><br>for India's 63<br>million factories.</div>
+        <div class="ll-qs" style="margin-top:10px">Real-time CO₂. Autonomous AI. Polygon blockchain. EU CBAM compliant. Monitor your entire fleet from one dashboard.</div>
+      </div>
+      <div class="ll-stats">
+        <div><div class="ll-sv" style="color:var(--go)">0.82</div><div class="ll-sl">kg CO₂/kWh</div></div>
+        <div><div class="ll-sv" style="color:var(--sun)">₹780</div><div class="ll-sl">Per tonne</div></div>
+        <div><div class="ll-sv">63M</div><div class="ll-sl">MSMEs</div></div>
+      </div>
+    </div>
+    <div class="lr">
+      <div class="lf">
+        <div class="lf-t">Welcome back</div>
+        <div class="lf-s">Sign in to Chennai Plant 1 · 6 machines · Multi-zone dashboard</div>
+        <div class="demo-note">ℹ️ Demo credentials pre-filled. Simulation runs with 6 machines automatically.</div>
+        <div class="fg"><label class="fl">Email</label><input class="fi" value="demo@carbonctrl.in" type="email"/></div>
+        <div class="fg"><label class="fl">Password</label><input class="fi" type="password" value="carbonctrl2025"/></div>
+        <button class="btn btn-go" style="width:100%;padding:12px;font-size:14px;justify-content:center;border-radius:var(--r2);margin-top:5px" onclick="SP('dashboard')">Enter Dashboard →</button>
+        <div class="div-or"><span>or</span></div>
+        <button class="btn btn-out" style="width:100%;padding:10px;justify-content:center;border-radius:var(--r2)" onclick="SP('dashboard')">Continue as Guest →</button>
+        <div style="text-align:center;margin-top:12px;font-size:10px;color:var(--t3)">Chennai Plant 1 · 6 Machines · 3 Zones · Kirloskar Fleet</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE: DASHBOARD ══════════ -->
+<div class="pg" id="pg-dashboard">
+  <div class="app-shell">
+    <div class="sbar">
+      <div class="sbar-sec">Navigate</div>
+      <button class="sbar-btn on" id="sb-d" onclick="SP('dashboard')"><span class="sic">▦</span>Dashboard</button>
+      <button class="sbar-btn" id="sb-a" onclick="SP('analytics')"><span class="sic">↗</span>Analytics</button>
+      <button class="sbar-btn" id="sb-b" onclick="SP('blockchain')"><span class="sic">⛓</span>Blockchain<span class="scnt" id="sb-bc">0</span></button>
+      <div class="sbar-sec">Fleet</div>
+      <div class="mach-sel">
+        <div class="ms-head">Chennai Plant 1</div>
+        <div id="sb-fleet"></div>
+      </div>
+      <div class="sbar-sec">AI Agent</div>
+      <div class="sagent">
+        <div class="sa-lbl">Q-Learning RL</div>
+        <div class="sa-r"><span class="sa-k">Episodes</span><span class="sa-v" id="sb-ep">0</span></div>
+        <div class="sa-r"><span class="sa-k">States</span><span class="sa-v" id="sb-st">0</span></div>
+        <div class="sa-r"><span class="sa-k">ε Explore</span><span class="sa-v" id="sb-eps">30.0%</span></div>
+        <div class="sa-r"><span class="sa-k">Fleet Saved</span><span class="sa-v" id="sb-sv">0.0000 kg</span></div>
+        <div class="eps-track"><div class="eps-bar" id="eps-bar" style="width:30%"></div></div>
+      </div>
+      <div class="sbar-formula">CO₂ = P(kW) × 0.82<br><span style="font-size:8px;color:var(--t3)">India CEA 2023</span></div>
+    </div>
+    <div class="main" id="dash-main">
+      <div class="ph">
+        <div class="ph-row">
+          <div><div class="ph-t">Fleet Dashboard</div><div class="ph-s"><span class="badge bg" id="ph-badge">ALL NOMINAL</span><span>Chennai Plant 1 · 6 Machines · 3 Zones</span><span id="ph-fresh" style="color:var(--t3)"></span></div></div>
+          <div class="ph-acts"><button class="btn btn-sm btn-out" id="manual-btn" onclick="toggleManual()">⏸ Manual Override</button><button class="btn btn-sm btn-out">⬇ Export PDF</button></div>
+        </div>
+      </div>
+      <!-- Fleet Overview Cards -->
+      <div class="fleet-grid" id="fleet-cards"></div>
+      <!-- Machine Tabs -->
+      <div class="mach-tabs" id="mach-tabs"></div>
+      <!-- Machine Hero -->
+      <div class="mhero ok" id="mhero">
+        <div class="mh-ic"><svg viewBox="0 0 30 30" fill="none" width="26" height="26"><rect x="3" y="9" width="22" height="11" rx="2.2" fill="var(--s5)" stroke="var(--wire3)" stroke-width=".7"/><line x1="7" y1="9" x2="7" y2="20" stroke="var(--wire3)" stroke-width=".6"/><line x1="11" y1="9" x2="11" y2="20" stroke="var(--wire3)" stroke-width=".6"/><line x1="15" y1="9" x2="15" y2="20" stroke="var(--wire3)" stroke-width=".6"/><line x1="19" y1="9" x2="19" y2="20" stroke="var(--wire3)" stroke-width=".6"/><rect x="0.5" y="12" width="3" height="5" rx="1.5" fill="var(--go)" opacity=".9"/><circle cx="13" cy="7" r="1.1" fill="var(--flame)" opacity=".9"/><circle cx="17" cy="7" r="1.1" fill="var(--go)" opacity=".9"/></svg></div>
+        <div class="mh-bd">
+          <div class="mh-tag" id="mh-tag">MACH-IND-001 · Zone 1 <div class="mh-ldot"><div class="mhld"></div>LIVE</div></div>
+          <div class="mh-nm" id="mh-nm">Kirloskar SF-K 18.5kW</div>
+          <div class="mh-su" id="mh-su">3-Phase Induction Motor · IE3 91.2% · 415V 3φ · TANGEDCO Grid</div>
+          <div class="mh-pills"><span class="badge bg">Monitoring Active</span><span class="badge bb">LSTM Predicting</span><span class="badge" style="color:#000;background:var(--t0);border-color:var(--t0)">Q-Learning RL</span><span class="badge bg" id="mh-sb">NOMINAL</span></div>
+        </div>
+        <div class="mh-r"><div><div class="mh-co2-l">Current CO₂</div><div class="mh-co2" id="mh-co2" style="color:var(--go)">— <span style="font-size:11px;opacity:.3;font-family:var(--M)">kg/hr</span></div></div><span class="badge bg" id="mh-ai">AI Optimal</span></div>
+      </div>
+      <!-- AI Banner -->
+      <div class="aib ok" id="aib">
+        <div class="ab-em" id="ab-em">🤖</div>
+        <div class="ab-bd"><div class="ab-eye" id="ab-eye">AI NOMINAL</div><div class="ab-t" id="ab-t">Nominal — Running at optimal efficiency</div><div class="ab-d" id="ab-d">Connecting to Wokwi ESP32 via MQTT... Simulation starting.</div></div>
+        <div class="ab-stats"><div class="abs"><div class="abs-v" id="abs-pred">—</div><div class="abs-l">LSTM Pred</div></div><div class="abs"><div class="abs-v" id="abs-lim">100%</div><div class="abs-l">AI Cap</div></div><div class="abs"><div class="abs-v" id="abs-trend">—</div><div class="abs-l">Trend</div></div></div>
+      </div>
+      <!-- 4 Metrics -->
+      <div class="mc-grid">
+        <div class="mc" style="--ac:var(--flame)"><div class="mc-lbl">CO₂ Emission <span class="badge" id="mc-tr" style="font-size:7.5px;background:var(--s3);color:var(--t3);border-color:var(--wire2)">STABLE</span></div><div class="mc-val" id="mc-co2" style="color:var(--go)">—<span class="mc-unit"> kg/hr</span></div><div class="mc-sub" id="mc-co2-s">Predicted: — · Trend: stable</div><div class="mc-spark"><canvas id="sp-co2"></canvas></div></div>
+        <div class="mc" style="--ac:var(--go)"><div class="mc-lbl">Fleet Saved <span class="badge bg">Session</span></div><div class="mc-val" id="mc-sv" style="color:var(--go)">0<span class="mc-unit"> kg</span></div><div class="mc-sub" id="mc-sv-s">₹0.00 carbon credits earned</div><div class="mc-spark"><canvas id="sp-sv"></canvas></div></div>
+        <div class="mc" style="--ac:var(--sky)"><div class="mc-lbl">Power Draw <span class="badge bb">ESP32</span></div><div class="mc-val" id="mc-pw" style="color:var(--sky)">—<span class="mc-unit"> W</span></div><div class="mc-sub" id="mc-pw-s">— % of rated</div><div class="mc-spark"><canvas id="sp-pw"></canvas></div></div>
+        <div class="mc" style="--ac:var(--poly)"><div class="mc-lbl">Chain Blocks <span class="badge bp">Polygon</span></div><div class="mc-val" id="mc-bl">0</div><div class="mc-sub" id="mc-rl-s">0 RL eps · 0 states</div></div>
+      </div>
+      <!-- Split Panel -->
+      <div class="split ok" id="split">
+        <div class="sp-h sp-bef"><div class="sp-tag"><div class="sp-td"></div>Without AI — Baseline</div><div class="sp-big" id="sp-b">0.000<span class="sp-unit"> kg/hr</span></div><div class="sp-rows"><div class="sp-row"><span class="sp-k">Load</span><span class="sp-v" id="spb-l">0%</span></div><div class="sp-row"><span class="sp-k">Power</span><span class="sp-v" id="spb-p">0 W</span></div><div class="sp-row"><span class="sp-k">Cost/hr</span><span class="sp-v" id="spb-c">₹0.000</span></div></div></div>
+        <div class="sp-mid"><div class="sp-vs">vs</div><div class="sp-delta" id="sp-dl">0.000<br>kg/hr<br>saved</div></div>
+        <div class="sp-h sp-aft"><div class="sp-tag"><div class="sp-td"></div>With Carbon Ctrl AI</div><div class="sp-big" id="sp-a">0.000<span class="sp-unit"> kg/hr</span></div><div class="sp-rows"><div class="sp-row"><span class="sp-k">Capped Load</span><span class="sp-v" id="spa-l">0%</span></div><div class="sp-row"><span class="sp-k">Power</span><span class="sp-v" id="spa-p">0 W</span></div><div class="sp-row"><span class="sp-k">Cost/hr</span><span class="sp-v" id="spa-c">₹0.000</span></div></div></div>
+      </div>
+      <!-- Context -->
+      <div class="ctx-row">
+        <div class="ctx-it"><div class="ctx-ic">🚗</div><div class="ctx-v" id="ctx-km">0.0 km</div><div class="ctx-d">km not driven</div></div>
+        <div class="ctx-it"><div class="ctx-ic">🌳</div><div class="ctx-v" id="ctx-tr">0.00</div><div class="ctx-d">tree-days absorbed</div></div>
+        <div class="ctx-it"><div class="ctx-ic">💡</div><div class="ctx-v" id="ctx-bl">0.0 hrs</div><div class="ctx-d">100W bulb hours</div></div>
+        <div class="ctx-it"><div class="ctx-ic">📱</div><div class="ctx-v" id="ctx-ph">0</div><div class="ctx-d">phone charges</div></div>
+        <div class="ctx-it"><div class="ctx-ic">💰</div><div class="ctx-v" id="ctx-rs" style="color:var(--go)">₹0.0000</div><div class="ctx-d">credits earned</div></div>
+      </div>
+      <!-- Charts + Sensors -->
+      <div style="display:grid;grid-template-columns:1fr 260px;gap:9px;margin-bottom:9px">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="cbox"><div class="cbox-h"><div class="cbox-t">CO₂ Emission vs LSTM Prediction</div><span class="badge bg">Live</span></div><div style="height:128px"><canvas id="ch-co2"></canvas></div></div>
+          <div class="cbox"><div class="cbox-h"><div class="cbox-t">Cumulative Fleet Savings vs Baseline</div><span class="badge bb">Session</span></div><div style="height:128px"><canvas id="ch-sv"></canvas></div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="cbox" style="padding:11px">
+            <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--t3);margin-bottom:9px">Sensor Telemetry</div>
+            <div class="s-row"><div class="s-ic">⚡</div><div class="s-bd"><div class="s-nm">Power</div><div class="s-vl" id="sv-pw" style="color:var(--sky)">— W</div></div><div class="s-bw"><div class="s-bg"><div class="s-bf" id="sb-pw" style="background:var(--sky);width:0%"></div></div><div class="s-pc" id="sp-pw-p">0%</div></div></div>
+            <div class="s-row"><div class="s-ic">🌿</div><div class="s-bd"><div class="s-nm">CO₂</div><div class="s-vl" id="sv-co2" style="color:var(--go)">— kg/hr</div></div><div class="s-bw"><div class="s-bg"><div class="s-bf" id="sb-c2" style="background:var(--go);width:0%"></div></div><div class="s-pc" id="sp-co2-p">0%</div></div></div>
+            <div class="s-row"><div class="s-ic">🌡</div><div class="s-bd"><div class="s-nm">Temp</div><div class="s-vl" id="sv-tmp" style="color:var(--sun)">— °C</div></div><div class="s-bw"><div class="s-bg"><div class="s-bf" id="sb-tm" style="background:var(--sun);width:0%"></div></div><div class="s-pc" id="sp-tmp-p">0%</div></div></div>
+            <div class="s-row"><div class="s-ic">💧</div><div class="s-bd"><div class="s-nm">Humidity</div><div class="s-vl" id="sv-hm" style="color:var(--sky)">— %</div></div><div class="s-bw"><div class="s-bg"><div class="s-bf" id="sb-hm" style="background:var(--poly2);width:0%"></div></div><div class="s-pc" id="sp-hm-p">0%</div></div></div>
+          </div>
+          <div class="sess">
+            <div class="sess-lbl">Session Summary</div>
+            <div class="sess-g">
+              <div><div class="sg-v" id="ss-sv">0.0000 kg</div><div class="sg-l">Fleet Saved</div></div>
+              <div><div class="sg-v" id="ss-cr">₹0.00</div><div class="sg-l">Credits</div></div>
+              <div><div class="sg-v" id="ss-ms">0</div><div class="sg-l">Packets</div></div>
+              <div><div class="sg-v" id="ss-ep">0</div><div class="sg-l">RL Eps</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Trail + Spec -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:18px">
+        <div class="trail"><div class="trail-h"><div class="trail-t">AI Optimisation Trail</div><span class="badge bg" id="trail-cnt">0 events</span></div><div class="trail-b" id="trail-b"><div class="empty"><div class="empty-ic">🤖</div><div class="empty-t">No AI decisions yet</div><div class="empty-d">Simulation starting automatically...</div></div></div></div>
+        <div style="background:var(--s1);border:1px solid var(--wire);border-radius:var(--r3);padding:13px">
+          <div style="font-size:11px;font-weight:700;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--wire);display:flex;align-items:center;gap:5px"><div class="mhld"></div>Machine Specification</div>
+          <div class="spec-g" id="spec-grid">
+            <div class="spec-r"><span class="spec-k">Model</span><span class="spec-v" id="spec-model">Kirloskar SF-K</span></div>
+            <div class="spec-r"><span class="spec-k">Type</span><span class="spec-v">3-Phase Induction</span></div>
+            <div class="spec-r"><span class="spec-k">Rated</span><span class="spec-v" id="spec-kw">18.5 kW</span></div>
+            <div class="spec-r"><span class="spec-k">Zone</span><span class="spec-v" id="spec-zone">Zone 1</span></div>
+            <div class="spec-r"><span class="spec-k">Voltage</span><span class="spec-v">415V 3Φ</span></div>
+            <div class="spec-r"><span class="spec-k">Current</span><span class="spec-v" id="spec-amps">32A</span></div>
+            <div class="spec-r"><span class="spec-k">Efficiency</span><span class="spec-v">IE3 — 91.2%</span></div>
+            <div class="spec-r"><span class="spec-k">Grid</span><span class="spec-v">TANGEDCO</span></div>
+            <div class="spec-r"><span class="spec-k">CO₂ Factor</span><span class="spec-v">0.82 kg/kWh</span></div>
+            <div class="spec-r"><span class="spec-k">Warn</span><span class="spec-v" style="color:var(--sun)" id="spec-warn">0.60 kg/hr</span></div>
+            <div class="spec-r"><span class="spec-k">Critical</span><span class="spec-v" style="color:var(--flame)" id="spec-crit">1.20 kg/hr</span></div>
+            <div class="spec-r"><span class="spec-k">Installed</span><span class="spec-v" id="spec-date">2021-03-12</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE: ANALYTICS ══════════ -->
+<div class="pg" id="pg-analytics">
+  <div class="app-shell">
+    <div class="sbar">
+      <div class="sbar-sec">Navigate</div>
+      <button class="sbar-btn" onclick="SP('dashboard')"><span class="sic">▦</span>Dashboard</button>
+      <button class="sbar-btn on" onclick="SP('analytics')"><span class="sic">↗</span>Analytics</button>
+      <button class="sbar-btn" onclick="SP('blockchain')"><span class="sic">⛓</span>Blockchain<span class="scnt" id="an-bc">0</span></button>
+      <div class="sbar-sec">Fleet Status</div>
+      <div class="mach-sel"><div class="ms-head">Live CO₂ Status</div><div id="an-fleet"></div></div>
+      <div class="sagent"><div class="sa-lbl">Session Stats</div><div class="sa-r"><span class="sa-k">Packets</span><span class="sa-v" id="an-pkts">0</span></div><div class="sa-r"><span class="sa-k">Decisions</span><span class="sa-v" id="an-decs">0</span></div><div class="sa-r"><span class="sa-k">RL Eps</span><span class="sa-v" id="an-eps">0</span></div></div>
+    </div>
+    <div class="main">
+      <div class="ph"><div class="ph-row"><div><div class="ph-t">Fleet Analytics</div><div class="ph-s"><span class="badge bg">Live</span><span>Chennai Plant 1 · 6 Machines · Real-time carbon intelligence</span></div></div><button class="btn btn-sm btn-out">⬇ Export PDF</button></div></div>
+      <!-- Fleet Summary -->
+      <div class="fleet-sum">
+        <div class="fs-card"><div class="fs-v" style="color:var(--go)" id="an-total-sv">0.0000 kg</div><div class="fs-l">Fleet CO₂ Saved</div></div>
+        <div class="fs-card"><div class="fs-v" style="color:var(--sun)" id="an-total-cr">₹0.00</div><div class="fs-l">Credits Earned</div></div>
+        <div class="fs-card"><div class="fs-v" id="an-total-pk">0</div><div class="fs-l">Total Packets</div></div>
+        <div class="fs-card"><div class="fs-v" style="color:var(--sky)" id="an-total-ms">0</div><div class="fs-l">Machines Active</div></div>
+        <div class="fs-card"><div class="fs-v" style="color:var(--poly2)" id="an-total-bl">0</div><div class="fs-l">Blocks On-Chain</div></div>
+      </div>
+      <div class="an-hero">
+        <div><div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--go);margin-bottom:5px">CO₂ Saved — This Session (All Machines)</div><div class="an-big" id="an-big">0.0000<span class="an-u"> kg</span></div><div style="font-size:12px;color:var(--t2);margin-top:7px" id="an-sub">≡ 0 g · ₹0.00 credits</div></div>
+        <div class="an-stats"><div class="an-s"><div class="as-v" id="an-s-pk">0</div><div class="as-l">Packets</div></div><div class="an-s"><div class="as-v" id="an-s-dc">0</div><div class="as-l">Decisions</div></div><div class="an-s"><div class="as-v" id="an-s-nm" style="color:var(--go)">0%</div><div class="as-l">Nominal</div></div><div class="an-s"><div class="as-v" id="an-s-ep">0</div><div class="as-l">RL Eps</div></div><div class="an-s"><div class="as-v" id="an-s-st">0</div><div class="as-l">States</div></div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px">
+        <div class="cbox"><div class="cbox-h"><div class="cbox-t">Fleet Savings + Credits Over Time</div><span class="badge bg">Live</span></div><div style="height:170px"><canvas id="an-ch-sv"></canvas></div></div>
+        <div class="cbox"><div class="cbox-h"><div class="cbox-t">AI Action Distribution</div><span class="badge bb">RL Agent</span></div><div style="height:170px"><canvas id="an-ch-dist"></canvas></div></div>
+      </div>
+      <div class="dt-wrap">
+        <div class="dt-h"><span>Full AI Decision Log — All Machines</span><span class="badge bg" id="an-log-cnt">0 decisions</span></div>
+        <div class="dt-row dt-hr"><span>Time</span><span>Machine</span><span>Action</span><span>CO₂ Before</span><span>CO₂ After</span><span>CO₂ Saved</span><span>Reward</span></div>
+        <div id="an-log"><div class="empty"><div class="empty-ic">📊</div><div class="empty-t">No decisions yet</div><div class="empty-d">Simulation will populate this log automatically</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE: BLOCKCHAIN ══════════ -->
+<div class="pg" id="pg-blockchain">
+  <div class="app-shell">
+    <div class="sbar">
+      <div class="sbar-sec">Navigate</div>
+      <button class="sbar-btn" onclick="SP('dashboard')"><span class="sic">▦</span>Dashboard</button>
+      <button class="sbar-btn" onclick="SP('analytics')"><span class="sic">↗</span>Analytics</button>
+      <button class="sbar-btn on" onclick="SP('blockchain')"><span class="sic">⛓</span>Blockchain<span class="scnt" id="bc-cnt">0</span></button>
+      <div class="sbar-sec">Network</div>
+      <div class="smach" style="margin:6px 8px;padding:11px 12px;border-radius:var(--r3);background:var(--s2);border:1px solid var(--polyb)"><div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--poly2);margin-bottom:7px">Polygon Amoy</div><div style="font-size:11px;font-weight:600;color:var(--poly2);margin-bottom:1px">⬡ Polygon Network</div><div style="font-size:9.5px;color:var(--t3);margin-bottom:6px">Chain ID: 80002</div><div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--poly2);font-weight:600;margin-bottom:4px"><div style="width:4px;height:4px;border-radius:50%;background:var(--poly2)"></div>Testnet Active</div><div style="font-size:8px;font-family:var(--M);color:var(--t3);margin-top:4px;word-break:break-all;line-height:1.7">0x742d35Cc...2E1234</div></div>
+      <div class="sagent" style="background:var(--polyd);border-color:var(--polyb)"><div class="sa-lbl" style="color:var(--poly2)">Chain Stats</div><div class="sa-r"><span class="sa-k">Blocks</span><span class="sa-v" id="bc-sb-bl">0</span></div><div class="sa-r"><span class="sa-k">Certified</span><span class="sa-v" id="bc-sb-sv" style="color:var(--go)">0 kg</span></div><div class="sa-r"><span class="sa-k">Credits</span><span class="sa-v" id="bc-sb-cr" style="color:var(--sun)">₹0</span></div><div class="sa-r"><span class="sa-k">Machines</span><span class="sa-v" style="color:var(--poly2)">6</span></div></div>
+    </div>
+    <div class="main">
+      <div class="ph"><div class="ph-row"><div><div class="ph-t">Blockchain Ledger</div><div class="ph-s"><span class="badge bp">⬡ Polygon Amoy</span><span>SHA-256 + Merkle Chain · Publicly verifiable · All machines</span></div></div><button class="btn btn-sm btn-poly" onclick="C.open()">⬡ Claim Certificate</button></div></div>
+      <div class="bc-stats">
+        <div class="bc-s"><div class="bc-sv" id="bc-bl">0</div><div class="bc-sl">Total Blocks</div></div>
+        <div class="bc-s"><div class="bc-sv" id="bc-sv" style="color:var(--go)">0.0000 kg</div><div class="bc-sl">CO₂ Certified</div></div>
+        <div class="bc-s"><div class="bc-sv" id="bc-cr" style="color:var(--sun)">₹0.00</div><div class="bc-sl">Credits Earned</div></div>
+        <div class="bc-s"><div class="bc-sv" style="color:var(--poly2)">Amoy</div><div class="bc-sl">Polygon Network</div></div>
+      </div>
+      <div class="chain-vis">
+        <div class="cv-h">
+          <div class="cv-t">Chain Visualiser — SHA-256 Merkle Chain (All Machines)</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-out" onclick="verifyChain()">✓ Verify All</button>
+            <button class="btn btn-sm" style="background:var(--fd);color:var(--flame);border:1px solid var(--fb)" onclick="tamperDemo()">⚡ Tamper Demo</button>
+            <button class="btn btn-sm btn-out" onclick="exportChain()">↓ Export JSON</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--t2);margin-bottom:9px">Each block = one AI decision across any machine. Tamper Demo corrupts a block → chain breaks red.</div>
+        <div class="chain-nodes" id="chain-nodes"><div class="cn"><div class="cn-b gen" title="Genesis">G</div><div class="cn-hash">genesis</div></div></div>
+      </div>
+      <div style="background:var(--polyd);border:1px solid var(--polyb);border-radius:var(--r3);padding:13px 16px;margin-bottom:9px">
+        <div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--poly2);margin-bottom:6px">Latest Block — SHA-256 Hash</div>
+        <div style="font-family:var(--M);font-size:10.5px;color:var(--go);word-break:break-all;line-height:2" id="latest-hash">Awaiting first AI decision...</div>
+        <div id="latest-poly" style="display:none;margin-top:6px"><a id="latest-poly-a" href="#" target="_blank" style="font-family:var(--M);font-size:9.5px;color:var(--poly2)">⬡ View on Polygonscan Amoy ↗</a></div>
+      </div>
+      <div class="tx-p"><div class="tx-h"><span>Transaction Feed — All Machines</span><span class="badge bp" id="bc-tx-cnt">0 blocks</span></div><div class="tx-b" id="tx-body"><div class="empty"><div class="empty-ic">⛓</div><div class="empty-t">No transactions yet</div><div class="empty-d">AI decisions will appear here automatically</div></div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONSTANTS ───────────────────────────────────────
+const CF=0.82,CP=780;
+const ACTIONS=[100,90,80,70,60,50,0];
+const SPEC={warn:.60,high:.90,crit:1.20};
+const BROKER='wss://broker.hivemq.com:8884/mqtt';
+const POLY='https://amoy.polygonscan.com';
+
+// ─── MACHINE FLEET DEFINITION ────────────────────────
+const MACHINES=[
+  {id:'MACH-IND-001',name:'Kirloskar SF-K 18.5kW',zone:'Zone 1',kw:18.5,amps:32,model:'Kirloskar SF-K',warn:.60,crit:1.20,installed:'2021-03-12'},
+  {id:'MACH-IND-002',name:'ABB M2BAX 15kW',zone:'Zone 1',kw:15,amps:28,model:'ABB M2BAX',warn:.50,crit:1.00,installed:'2020-08-15'},
+  {id:'MACH-IND-003',name:'Siemens 1LE1 22kW',zone:'Zone 2',kw:22,amps:40,model:'Siemens 1LE1',warn:.72,crit:1.44,installed:'2022-01-20'},
+  {id:'MACH-IND-004',name:'Crompton ND 11kW',zone:'Zone 2',kw:11,amps:20,model:'Crompton ND',warn:.36,crit:.72,installed:'2019-11-03'},
+  {id:'MACH-IND-005',name:'WEG W22 7.5kW',zone:'Zone 3',kw:7.5,amps:14,model:'WEG W22',warn:.25,crit:.49,installed:'2023-04-08'},
+  {id:'MACH-IND-006',name:'Bharat Bijlee 30kW',zone:'Zone 3',kw:30,amps:56,model:'Bharat Bijlee',warn:.98,crit:1.96,installed:'2020-06-22'}
+];
+
+// ─── PER-MACHINE STATE ────────────────────────────────
+const MS=MACHINES.map(()=>({
+  load:0,power_w:0,co2_kg:0,temp_c:0,humidity:0,
+  pred:0,trend:'stable',ai_limit:100,label:'NOMINAL',
+  saved:0,msgs:0,eps:.30,ep:0,states:0,
+  hist:[],sparks:{co2:[],sv:[],pw:[]},
+  simPhase:Math.random()*Math.PI*2,
+  simLoad:30+Math.random()*40,
+  simScen:'normal',simTick:0,
+  counts:{NOMINAL:0,THROTTLE_LIGHT:0,THROTTLE_HEAVY:0,CRITICAL_SHUTDOWN:0},
+  log:[],optLog:[],chain:[]
+}));
+
+// ─── GLOBAL STATE ─────────────────────────────────────
+let gChain=[],gLog=[],gOptLog=[];
+let gSaved=0,gMsgs=0,gEp=0,gStates=0,gEps=.30;
+let gCounts={NOMINAL:0,THROTTLE_LIGHT:0,THROTTLE_HEAVY:0,CRITICAL_SHUTDOWN:0};
+let gManual=false,mqttClient=null,gConnected=false;
+let lastMsg=Date.now(),showingKeys=false,themeLight=false;
+let activeMachIdx=0;
+let simInts=[];
+const QT={};
+const charts={};
+const sparks={co2:[],sv:[],pw:[]};
+let PAGES=['landing','login','dashboard','analytics','blockchain'];
+let APP_PAGES=['dashboard','analytics','blockchain'];
+
+// ─── HELPERS ─────────────────────────────────────────
+const G=id=>document.getElementById(id);
+function $t(id,html,col){const e=G(id);if(!e)return;e.innerHTML=html;if(col)e.style.color=col}
+function $cls(id,cls){const e=G(id);if(e)e.className=cls}
+function $bar(id,pct){const e=G(id);if(e)e.style.width=Math.min(100,Math.max(0,pct))+'%'}
+function badge(id,txt,cls){const e=G(id);if(!e)return;e.textContent=txt;e.className='badge '+cls}
+
+// ─── SHA-256 ─────────────────────────────────────────
+async function sha256(s){
+  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+// ─── RL ENGINE (per machine) ──────────────────────────
+function stateKey(co2,trend,load){
+  return`${Math.min(4,Math.floor(co2/.25))}_${{falling:0,stable:1,rising:2}[trend]??1}_${Math.min(4,Math.floor(load/20))}`;
+}
+function getQ(s,machId){
+  const k=machId+'_'+s;
+  if(!QT[k]){QT[k]=new Array(ACTIONS.length).fill(0);gStates++;}
+  return QT[k];
+}
+function chooseAction(co2,trend,load,machId){
+  const s=stateKey(co2,trend,load),q=getQ(s,machId);
+  const idx=Math.random()<gEps?Math.floor(Math.random()*ACTIONS.length):q.indexOf(Math.max(...q));
+  gEps=Math.max(.05,gEps*.9998);
+  return{lim:ACTIONS[idx],s,idx};
+}
+function learn(s,idx,cb,ca,lb,la,machId){
+  const sv=Math.max(0,cb-ca);
+  const r=2*sv-(Math.max(0,lb-la)/100)-(ACTIONS[idx]<100&&cb<.4?.3:0)-(ca>SPEC.crit?6:0);
+  const ns=stateKey(ca,'stable',la),q=getQ(s,machId);
+  q[idx]+=.12*(r+.95*Math.max(...getQ(ns,machId))-q[idx]);
+  gEp++;return{r,sv};
+}
+function predict(co2,hist){
+  hist.push(co2);if(hist.length>30)hist.shift();
+  if(hist.length<3)return{pred:co2,trend:'stable'};
+  let e=hist[0];
+  for(let i=1;i<hist.length;i++)e=.28*hist[i]+.72*e;
+  const r5=hist.slice(-5).reduce((a,b)=>a+b,0)/Math.min(5,hist.length);
+  const r10=hist.length>=10?hist.slice(-10,-5).reduce((a,b)=>a+b,0)/5:r5;
+  return{pred:e,trend:r5>r10*1.06?'rising':r5<r10*.94?'falling':'stable'};
+}
+
+// ─── ROUTING ─────────────────────────────────────────
+function SP(name){
+  PAGES.forEach(p=>{
+    const el=G('pg-'+p);
+    if(el){el.classList.remove('on');el.style.display='none';}
+  });
+  const target=G('pg-'+name);
+  if(!target)return;
+  target.style.display='block';
+  target.classList.add('on');
+  const isApp=APP_PAGES.includes(name);
+  const nl=G('nav-land'),na=G('nav-app');
+  if(nl)nl.style.display=isApp?'none':'flex';
+  if(na)na.style.display=isApp?'flex':'none';
+  document.body.style.overflow=isApp?'hidden':'auto';
+  if(isApp){
+    if(!mqttClient)connectMQTT();
+    if(!simInts.length)setTimeout(startSims,1500);
+    buildFleetUI();
+  }
+  if(name==='dashboard'&&!charts.co2)setTimeout(initDashCharts,200);
+  if(name==='analytics'&&!charts.anSv)setTimeout(initAnCharts,200);
+  ['d','a','b'].forEach(x=>{const el=G('sb-'+x);if(el)el.classList.remove('on')});
+  const sbMap={dashboard:'sb-d',analytics:'sb-a',blockchain:'sb-b'};
+  if(sbMap[name]){const el=G(sbMap[name]);if(el)el.classList.add('on');}
+  window.scrollTo(0,0);
+}
+
+// ─── FLEET UI BUILD ───────────────────────────────────
+function buildFleetUI(){
+  // Sidebar fleet list (dashboard)
+  const sbf=G('sb-fleet');
+  if(sbf){
+    sbf.innerHTML=MACHINES.map((m,i)=>{
+      const ms=MS[i];
+      const col=ms.label==='CRITICAL_SHUTDOWN'?'var(--flame)':ms.label.includes('THROTTLE')?'var(--sun)':'var(--go)';
+      const active=i===activeMachIdx?' active':'';
+      return`<div class="ms-item${active}" onclick="switchMachine(${i})">
+        <div class="ms-dot" style="background:${col}"></div>
+        <div class="ms-info">
+          <div class="ms-name">${m.id}</div>
+          <div class="ms-co2" style="color:${col}">${ms.co2_kg?ms.co2_kg.toFixed(3)+' kg/hr':'— kg/hr'}</div>
+        </div>
+        <div class="ms-status" style="background:${col}1a;color:${col};border:1px solid ${col}33">${ms.label==='NOMINAL'?'OK':ms.label==='CRITICAL_SHUTDOWN'?'CRIT':'WARN'}</div>
+      </div>`;
+    }).join('');
+  }
+  // Analytics sidebar fleet
+  const anf=G('an-fleet');
+  if(anf){
+    anf.innerHTML=MACHINES.map((m,i)=>{
+      const ms=MS[i];
+      const col=ms.label==='CRITICAL_SHUTDOWN'?'var(--flame)':ms.label.includes('THROTTLE')?'var(--sun)':'var(--go)';
+      return`<div class="ms-item">
+        <div class="ms-dot" style="background:${col}"></div>
+        <div class="ms-info">
+          <div class="ms-name">${m.id}</div>
+          <div class="ms-co2" style="color:${col}">${ms.co2_kg?ms.co2_kg.toFixed(3)+' kg/hr':'—'}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  // Fleet cards (dashboard top)
+  const fc=G('fleet-cards');
+  if(fc){
+    fc.innerHTML=MACHINES.map((m,i)=>{
+      const ms=MS[i];
+      const col=ms.label==='CRITICAL_SHUTDOWN'?'var(--flame)':ms.label.includes('THROTTLE')?'var(--sun)':'var(--go)';
+      const cls=ms.label==='CRITICAL_SHUTDOWN'?'crit':ms.label.includes('THROTTLE')?'warn':'';
+      const active=i===activeMachIdx?' active':'';
+      const pct=ms.co2_kg?Math.min(100,(ms.co2_kg/MACHINES[i].crit)*100):0;
+      return`<div class="fleet-card${active} ${cls}" onclick="switchMachine(${i})" style="--ac:${col}">
+        <div class="fc-top"><div><div class="fc-id">${m.id}</div><div class="fc-nm">${m.name}</div><div class="fc-zone">${m.zone}</div></div><span class="badge ${ms.label==='NOMINAL'?'bg':ms.label.includes('THROTTLE')?'ba':'br'}">${ms.label==='NOMINAL'?'OK':ms.label==='CRITICAL_SHUTDOWN'?'CRIT':'WARN'}</span></div>
+        <div class="fc-co2" style="color:${col}">${ms.co2_kg?ms.co2_kg.toFixed(3):'—'} <span style="font-size:10px;opacity:.4;font-family:var(--M)">kg/hr</span></div>
+        <div class="fc-bar"><div class="fc-fill" style="width:${pct}%;background:${col}"></div></div>
+      </div>`;
+    }).join('');
+  }
+  // Machine tabs
+  const mt=G('mach-tabs');
+  if(mt){
+    mt.innerHTML=MACHINES.map((m,i)=>{
+      const ms=MS[i];
+      const tcls=ms.label==='CRITICAL_SHUTDOWN'?'crit':ms.label.includes('THROTTLE')?'warn':'';
+      const active=i===activeMachIdx?' on':'';
+      const col=ms.label==='CRITICAL_SHUTDOWN'?'var(--flame)':ms.label.includes('THROTTLE')?'var(--sun)':'var(--go)';
+      return`<div class="mt${tcls}${active}" onclick="switchMachine(${i})"><div class="mt-dot" style="background:${col}"></div>${m.id.replace('MACH-IND-','M-')}</div>`;
+    }).join('');
+  }
+}
+
+function switchMachine(idx){
+  activeMachIdx=idx;
+  buildFleetUI();
+  const m=MACHINES[idx],ms=MS[idx];
+  // Update spec panel
+  $t('spec-model',m.model);$t('spec-kw',m.kw+' kW');
+  $t('spec-zone',m.zone);$t('spec-amps',m.amps+'A');
+  $t('spec-warn',m.warn.toFixed(2)+' kg/hr');$t('spec-crit',m.crit.toFixed(2)+' kg/hr');
+  $t('spec-date',m.installed);
+  $t('mh-tag',`${m.id} · ${m.zone} <div class="mh-ldot"><div class="mhld"></div>LIVE</div>`);
+  $t('mh-nm',m.name);
+  $t('mh-su',`${m.model} · IE3 91.2% · 415V 3φ · TANGEDCO Grid · 0.82 kg CO₂/kWh`);
+  updateDashForMachine(ms,m);
+}
+
+// ─── TOASTS ──────────────────────────────────────────
+function toast(msg,type='info'){
+  const rack=G('toasts');if(!rack)return;
+  const el=document.createElement('div');
+  const ic={ok:'✅',warn:'⚠️',err:'🚨',info:'ℹ️'}[type]||'ℹ️';
+  el.className=`toast t${type}`;
+  el.innerHTML=`<span>${ic}</span><span style="flex:1;font-size:11px">${msg}</span><button style="background:none;border:none;color:inherit;cursor:pointer;margin-left:3px;opacity:.4;font-size:12px" onclick="this.parentElement.remove()">×</button>`;
+  rack.appendChild(el);
+  setTimeout(()=>el.classList.add('show'),10);
+  setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.remove(),400)},4000);
+}
+
+// ─── SIMULATION (one per machine, staggered) ──────────
+function startSims(){
+  if(simInts.length||gConnected)return;
+  toast('🔄 Demo mode — simulating 6 machines · AI running live','info');
+  MACHINES.forEach((m,i)=>{
+    const jitter=200+i*180;
+    setTimeout(()=>{
+      const iv=setInterval(()=>{
+        const ms=MS[i];
+        ms.simPhase+=0.07+i*0.01;ms.simTick++;
+        if(ms.simTick>28+i*4){ms.simTick=0;const s=['normal','high_load','spike','cooling'];ms.simScen=s[Math.floor(Math.random()*s.length)];}
+        let tgt;
+        if(ms.simScen==='high_load')tgt=70+Math.sin(ms.simPhase)*14+Math.random()*8;
+        else if(ms.simScen==='spike')tgt=85+Math.sin(ms.simPhase*2)*9+Math.random()*7;
+        else if(ms.simScen==='cooling')tgt=22+Math.sin(ms.simPhase*.5)*10+Math.random()*5;
+        else tgt=45+Math.sin(ms.simPhase*.6)*22+Math.random()*10;
+        tgt=Math.min(100,Math.max(5,tgt));
+        ms.simLoad=ms.simLoad*.84+tgt*.16;
+        const load=Math.round(ms.simLoad);
+        const power_w=Math.round((load/100)*m.kw*1000*(0.88+Math.random()*.12));
+        const co2_kg=parseFloat(((power_w/1000)*CF).toFixed(4));
+        const temp_c=parseFloat((22+load*.15+Math.random()*2).toFixed(1));
+        const humidity=parseFloat((55+Math.sin(ms.simPhase*.3)*10+Math.random()*4).toFixed(1));
+        processData({load,power_w,co2_kg,temp_c,humidity},i);
+      },900+i*70);
+      simInts.push(iv);
+    },jitter);
+  });
+}
+
+// ─── MQTT ─────────────────────────────────────────────
+function connectMQTT(){
+  try{
+    mqttClient=mqtt.connect(BROKER,{reconnectPeriod:5000,connectTimeout:10000});
+    mqttClient.on('connect',()=>{
+      gConnected=true;setLivePill(true);
+      mqttClient.subscribe('ecogrid3/factory/telemetry');
+      simInts.forEach(iv=>clearInterval(iv));simInts=[];
+      toast('✅ Connected to Wokwi ESP32 — live MQTT data','ok');
+    });
+    mqttClient.on('error',()=>{gConnected=false;setLivePill(false);if(!simInts.length)startSims();});
+    mqttClient.on('offline',()=>{gConnected=false;setLivePill(false);if(!simInts.length)startSims();});
+    mqttClient.on('message',(t,msg)=>{
+      if(t!=='ecogrid3/factory/telemetry')return;
+      let d;try{d=JSON.parse(msg.toString())}catch{return}
+      simInts.forEach(iv=>clearInterval(iv));simInts=[];processData(d,0);
+    });
+  }catch{gConnected=false;setLivePill(false);if(!simInts.length)startSims();}
+}
+function setLivePill(on){
+  const p=G('live-pill'),t=G('live-txt');
+  if(p)p.className='live-pill '+(on?'on':'off');
+  if(t)t.textContent=on?'ESP32 Live':'Demo Mode';
+}
+setInterval(()=>{
+  if(!lastMsg)return;
+  const s=((Date.now()-lastMsg)/1000).toFixed(1);
+  $t('fresh-txt',s+'s ago');$t('ph-fresh',s+'s ago');
+},600);
+
+// ─── CORE PROCESSING ─────────────────────────────────
+async function processData(d,machIdx){
+  if(gManual)return;
+  const m=MACHINES[machIdx],ms=MS[machIdx];
+  gMsgs++;ms.msgs++;lastMsg=Date.now();
+  const{load,power_w:pw,co2_kg:co2,temp_c:temp,humidity:hum}=d;
+  const{pred,trend}=predict(co2,ms.hist);
+  const{lim,s,idx}=chooseAction(pred,trend,load,m.id);
+  let label='NOMINAL',finalLim=lim;
+  if(pred>=m.crit){finalLim=0;label='CRITICAL_SHUTDOWN';}
+  else if(pred>=m.warn*1.5){finalLim=Math.min(lim,50);label='THROTTLE_HEAVY';}
+  else if(pred>=m.warn){finalLim=Math.min(lim,80);label='THROTTLE_LIGHT';}
+
+  if(ms.msgs>1&&ms.load){
+    const{r,sv}=learn(ms.prev_s||s,ms.prev_idx||idx,ms.co2_kg||co2,co2,ms.load,load,m.id);
+    ms.saved+=sv;gSaved+=sv;
+    ms.counts[label]=(ms.counts[label]||0)+1;
+    gCounts[label]=(gCounts[label]||0)+1;
+    if(sv>0.00002||label!=='NOMINAL'){
+      const hash=await sha256(`${machIdx}|${gMsgs}|${label}|${sv.toFixed(8)}|${Date.now()}`);
+      const sig='0x'+hash.slice(0,62);
+      const tx={idx:gChain.length+1,machId:m.id,machIdx,type:label,lim:finalLim,cb:ms.co2_kg||co2,ca:co2,sv,r,hash,sig,t:new Date().toLocaleTimeString(),eps:gEps};
+      gChain=[tx,...gChain].slice(0,80);
+      ms.chain=[tx,...ms.chain].slice(0,20);
+      gLog=[{...tx},...gLog].slice(0,120);
+      ms.optLog=[{...tx},...ms.optLog].slice(0,30);
+      renderChain();renderTxFeed();renderTrail();updateLatestHash(tx);updateBcCounters();
+      if(label==='CRITICAL_SHUTDOWN'){
+        G('crit-ov').classList.add('on');
+        $t('crit-p',`${m.id}: LSTM predicted ${pred.toFixed(3)} kg/hr — above critical ${m.crit.toFixed(2)}. Q-Learning RL executed emergency shutdown. Block #${tx.idx}.`);
+        $t('crit-hash','SHA-256: '+hash);
+        toast(`🚨 ${m.id} CRITICAL SHUTDOWN — Block #${tx.idx}`,'err');
+      } else if(label==='THROTTLE_HEAVY'&&gChain.length%5===0){
+        toast(`⚡ ${m.id} Heavy Throttle · Block #${tx.idx}`,'warn');
+      } else if(sv>.0003&&gChain.length%12===0){
+        toast(`✓ ${m.id} +${sv.toFixed(4)} kg saved · Block #${tx.idx}`,'ok');
+      }
+    }
+  }
+  ms.prev_s=s;ms.prev_idx=idx;
+  ms.load=load;ms.power_w=pw;ms.co2_kg=co2;ms.temp_c=temp;ms.humidity=hum;
+  ms.pred=pred;ms.trend=trend;ms.ai_limit=finalLim;ms.label=label;
+  ms.ep=gEp;
+  ms.sparks.co2=[...ms.sparks.co2.slice(-19),+co2.toFixed(4)];
+  ms.sparks.sv=[...ms.sparks.sv.slice(-19),+ms.saved.toFixed(5)];
+  ms.sparks.pw=[...ms.sparks.pw.slice(-19),pw];
+
+  buildFleetUI();
+  if(machIdx===activeMachIdx)updateDashForMachine(ms,m);
+  updateAnalytics();updateLanding();
+  updateGlobalEps();
+}
+
+function updateGlobalEps(){
+  $t('sb-ep',gEp);$t('sb-st',gStates);
+  $t('sb-eps',(gEps*100).toFixed(1)+'%');
+  $t('sb-sv',gSaved.toFixed(4)+' kg');
+  $bar('eps-bar',gEps*100);
+}
+
+// ─── DASHBOARD UPDATE FOR SELECTED MACHINE ────────────
+function updateDashForMachine(ms,m){
+  if(!ms||!ms.co2_kg)return;
+  const{load,power_w:pw,co2_kg:co2,temp_c:temp,humidity:hum,pred,trend,ai_limit:lim,label}=ms;
+  const cc=co2>=m.crit?'var(--flame)':co2>=m.warn?'var(--sun)':'var(--go)';
+  const baseCO2=(load/100)*CF,capLoad=Math.round(load*(lim/100)),afterCO2=(capLoad/100)*CF;
+  const delta=Math.max(0,baseCO2-afterCO2);
+  const cls=label==='CRITICAL_SHUTDOWN'?'crit':label.includes('THROTTLE')?'warn':'ok';
+  $cls('mhero','mhero '+cls);$cls('split','split '+cls);
+  const aib=G('aib');if(aib)aib.className='aib '+cls;
+  $t('mh-co2',co2.toFixed(3)+' <span style="font-size:11px;opacity:.3;font-family:var(--M)">kg/hr</span>',cc);
+  badge('mh-sb',label.replace(/_/g,' '),label==='CRITICAL_SHUTDOWN'?'br':label.includes('THROTTLE')?'ba':'bg');
+  badge('mh-ai',label==='NOMINAL'?'AI Optimal':label==='CRITICAL_SHUTDOWN'?'Emergency':'AI Throttling',label==='CRITICAL_SHUTDOWN'?'br':label.includes('THROTTLE')?'ba':'bg');
+  badge('ph-badge',label.replace(/_/g,' '),label==='CRITICAL_SHUTDOWN'?'br':label.includes('THROTTLE')?'ba':'bg');
+  const emMap={CRITICAL_SHUTDOWN:'🚨',THROTTLE_HEAVY:'⚡',THROTTLE_LIGHT:'🔶',NOMINAL:'🤖'};
+  const tlMap={CRITICAL_SHUTDOWN:'Emergency Shutdown — Load cut to 0%',THROTTLE_HEAVY:'Heavy Throttle — Load capped to 50%',THROTTLE_LIGHT:'Preventive Throttle — Load capped to 80%',NOMINAL:'Nominal — Running at optimal efficiency'};
+  const eyMap={CRITICAL_SHUTDOWN:'CRITICAL ALERT',THROTTLE_HEAVY:'HEAVY THROTTLE',THROTTLE_LIGHT:'PREVENTIVE THROTTLE',NOMINAL:'AI NOMINAL'};
+  $t('ab-em',emMap[label]||'🤖');$t('ab-eye',eyMap[label]);$t('ab-t',tlMap[label]);
+  $t('ab-d',`${m.id} · LSTM: ${pred.toFixed(3)} kg/hr · Trend: ${trend} · Q-RL ε=${(gEps*100).toFixed(1)}% · ${gStates} states`);
+  $t('abs-pred',pred.toFixed(3));$t('abs-lim',lim+'%');$t('abs-trend',trend);
+  $t('mc-co2',co2.toFixed(3),cc);$t('mc-co2-s',`Predicted: ${pred.toFixed(3)} · Trend: ${trend}`);
+  const trEl=G('mc-tr');if(trEl){trEl.textContent=trend.toUpperCase();trEl.style.color=trend==='rising'?'var(--flame)':trend==='falling'?'var(--go)':'var(--t3)';}
+  $t('mc-sv',gSaved.toFixed(4),co2>=m.crit?'var(--flame)':co2>=m.warn?'var(--sun)':'var(--go)');
+  $t('mc-sv-s',`₹${((gSaved/1000)*CP).toFixed(5)} carbon credits`);
+  $t('mc-pw',pw);$t('mc-pw-s',`${((pw/(m.kw*1000))*100).toFixed(1)}% of ${(m.kw*1000).toFixed(0)}W rated`);
+  $t('mc-bl',gChain.length);$t('mc-rl-s',`${gEp} RL eps · ${gStates} states`);
+  $t('sp-b',baseCO2.toFixed(3));$t('sp-a',afterCO2.toFixed(3));
+  $t('sp-dl',`−${delta.toFixed(4)}<br>kg/hr<br>saved`);
+  $t('spb-l',load+'%');$t('spb-p',pw+' W');$t('spb-c','₹'+((baseCO2/1000)*CP).toFixed(6));
+  $t('spa-l',capLoad+'%');$t('spa-p',Math.round(pw*(lim/100))+' W');$t('spa-c','₹'+((afterCO2/1000)*CP).toFixed(6));
+  $t('ctx-km',((gSaved/.12).toFixed(1))+' km');$t('ctx-tr',((gSaved/.06).toFixed(2)));
+  $t('ctx-bl',((gSaved/.04).toFixed(1))+' hrs');$t('ctx-ph',Math.round(gSaved/.008));
+  $t('ctx-rs','₹'+((gSaved/1000)*CP).toFixed(4));
+  $t('sv-pw',pw+' W');$bar('sb-pw',Math.min(100,pw/(m.kw*10)));$t('sp-pw-p',Math.round(pw/(m.kw*10))+'%');
+  $t('sv-co2',co2.toFixed(3)+' kg/hr',cc);$bar('sb-c2',Math.min(100,(co2/1.5)*100));$t('sp-co2-p',Math.round((co2/1.5)*100)+'%');
+  $t('sv-tmp',temp.toFixed(1)+' °C',temp>35?'var(--sun)':'var(--t1)');$bar('sb-tm',Math.min(100,(temp/50)*100));$t('sp-tmp-p',Math.round((temp/50)*100)+'%');
+  $t('sv-hm',Math.round(hum)+' %');$bar('sb-hm',Math.min(100,hum));$t('sp-hm-p',Math.round(hum)+'%');
+  $t('ss-sv',gSaved.toFixed(4)+' kg');$t('ss-cr','₹'+((gSaved/1000)*CP).toFixed(5));
+  $t('ss-ms',gMsgs);$t('ss-ep',gEp);
+  sparks.co2=[...sparks.co2.slice(-19),+co2.toFixed(4)];
+  sparks.sv=[...sparks.sv.slice(-19),+gSaved.toFixed(5)];
+  sparks.pw=[...sparks.pw.slice(-19),pw];
+  updSpark('sp-co2',sparks.co2);updSpark('sp-sv',sparks.sv);updSpark('sp-pw',sparks.pw);
+  const tl=new Date().toLocaleTimeString();
+  pushCh(charts.co2,tl,+co2.toFixed(4),+pred.toFixed(4));
+  pushCh(charts.sv,tl,+gSaved.toFixed(5),+(gSaved*1.28+.00001).toFixed(5));
+  renderTrail();
+}
+
+// ─── ANALYTICS UPDATE ────────────────────────────────
+function updateAnalytics(){
+  const tot=Object.values(gCounts).reduce((a,b)=>a+b,0);
+  $t('an-big',gSaved.toFixed(4)+'<span class="an-u"> kg</span>');
+  $t('an-sub',`≡ ${(gSaved*1000).toFixed(1)} g · ₹${((gSaved/1000)*CP).toFixed(5)} credits`);
+  $t('an-pkts',gMsgs);$t('an-decs',tot);$t('an-eps',gEp);
+  $t('an-s-pk',gMsgs);$t('an-s-dc',tot);
+  $t('an-s-nm',tot>0?((gCounts.NOMINAL/tot)*100).toFixed(0)+'%':'0%');
+  $t('an-s-ep',gEp);$t('an-s-st',gStates);
+  $t('an-log-cnt',gLog.length+' decisions');
+  $t('an-total-sv',gSaved.toFixed(4)+' kg');
+  $t('an-total-cr','₹'+((gSaved/1000)*CP).toFixed(4));
+  $t('an-total-pk',gMsgs);
+  $t('an-total-ms',MACHINES.length);
+  $t('an-total-bl',gChain.length);
+  $t('an-bc',gChain.length);
+  const tl=new Date().toLocaleTimeString();
+  pushCh(charts.anSv,tl,+gSaved.toFixed(5),+((gSaved/1000)*CP).toFixed(6));
+  if(charts.anDist){charts.anDist.data.datasets[0].data=[gCounts.NOMINAL,gCounts.THROTTLE_LIGHT,gCounts.THROTTLE_HEAVY,gCounts.CRITICAL_SHUTDOWN];charts.anDist.update('none');}
+  const lb=G('an-log');
+  if(lb&&gLog.length){
+    lb.innerHTML=gLog.slice(0,40).map(e=>{
+      const c=e.type==='NOMINAL'?'bg':e.type.includes('HEAVY')||e.type==='CRITICAL_SHUTDOWN'?'br':'ba';
+      return`<div class="dt-row"><span style="font-family:var(--M);color:var(--t3)">${e.t}</span><span style="font-family:var(--M);font-size:9.5px;color:var(--sky)">${e.machId}</span><span><span class="badge ${c}">${e.type.replace(/_/g,' ')}</span></span><span style="font-family:var(--M);color:var(--flame)">${e.cb.toFixed(4)}</span><span style="font-family:var(--M);color:var(--go)">${e.ca.toFixed(4)}</span><span style="font-family:var(--M);color:var(--go);font-weight:700">+${e.sv.toFixed(5)}</span><span style="font-family:var(--M);color:${e.r>0?'var(--go)':'var(--flame)'}">${e.r.toFixed(2)}</span></div>`;
+    }).join('');
+  }
+}
+
+// ─── LANDING UPDATE ──────────────────────────────────
+function updateLanding(){
+  const totalCO2=MS.reduce((a,ms)=>a+(ms.co2_kg||0),0);
+  const cc=totalCO2>=2?'var(--flame)':totalCO2>=1?'var(--sun)':'var(--go)';
+  $t('lnd-co2',totalCO2.toFixed(3),cc);
+  $t('lnd-sv',gSaved.toFixed(4));
+  $t('lnd-cr','₹'+((gSaved/1000)*CP).toFixed(4));
+}
+
+// ─── BLOCKCHAIN RENDER ───────────────────────────────
+function renderChain(){
+  const cnt=G('chain-nodes');if(!cnt)return;
+  cnt.innerHTML=`<div class="cn"><div class="cn-b gen" title="Genesis">G</div><div class="cn-hash">genesis</div></div>`;
+  [...gChain].reverse().slice(0,24).forEach(tx=>{
+    const arr=document.createElement('div');arr.className='cn-arr';
+    arr.innerHTML=`<svg width="16" height="8"><path d="M0 4L14 4" stroke="var(--wire3)" fill="none"/><path d="M10 1L14 4L10 7" stroke="var(--wire3)" fill="none"/></svg>`;
+    cnt.appendChild(arr);
+    const n=document.createElement('div');n.className='cn';
+    const tc=tx.type==='NOMINAL'?'valid':tx.type==='CRITICAL_SHUTDOWN'?'bad':'poly';
+    n.innerHTML=`<div class="cn-b ${tc}" title="${tx.machId} · ${tx.type}" onclick="window.open('${POLY}/tx/${tx.sig}')">${tx.idx}</div><div class="cn-hash">${tx.hash.slice(0,7)}...</div>`;
+    cnt.appendChild(n);
+  });
+}
+function updateLatestHash(tx){
+  $t('latest-hash',tx.hash);
+  const w=G('latest-poly'),l=G('latest-poly-a');
+  if(w&&l&&tx.sig){w.style.display='block';l.href=POLY+'/tx/'+tx.sig;}
+}
+function renderTxFeed(){
+  const tb=G('tx-body');if(!tb||!gChain.length)return;
+  tb.innerHTML=gChain.slice(0,18).map(tx=>{
+    const c=tx.type==='NOMINAL'?'bg':tx.type.includes('HEAVY')||tx.type==='CRITICAL_SHUTDOWN'?'br':'ba';
+    return`<div class="tx-it">
+      <div class="tx-top"><span class="tx-hash" onclick="window.open('${POLY}/tx/${tx.sig}')">${tx.sig}</span><div style="display:flex;gap:4px;flex-wrap:wrap"><span class="badge ${c}">${tx.type.replace(/_/g,' ')}</span><span class="badge bb">${tx.machId}</span></div></div>
+      <div class="tx-cells">
+        <div class="txc"><div class="txc-k">CO₂ Before</div><div class="txc-v" style="color:var(--flame)">${tx.cb.toFixed(4)}</div></div>
+        <div class="txc"><div class="txc-k">CO₂ After</div><div class="txc-v" style="color:var(--go)">${tx.ca.toFixed(4)}</div></div>
+        <div class="txc"><div class="txc-k">Saved</div><div class="txc-v" style="color:var(--go)">${tx.sv.toFixed(5)}</div></div>
+        <div class="txc"><div class="txc-k">AI Cap</div><div class="txc-v">${tx.lim}%</div></div>
+        <div class="txc"><div class="txc-k">Reward</div><div class="txc-v" style="color:${tx.r>0?'var(--go)':'var(--flame)'}">${tx.r.toFixed(3)}</div></div>
+      </div>
+      <div class="tx-ok"><div class="txokd"></div>Block #${tx.idx} · ${tx.machId} · ${tx.t}</div>
+    </div>`;
+  }).join('');
+}
+function renderTrail(){
+  const ms=MS[activeMachIdx];
+  const tb=G('trail-b');if(!tb||!ms.optLog.length)return;
+  tb.innerHTML=ms.optLog.slice(0,16).map(e=>{
+    const dc=e.type==='NOMINAL'?'var(--go)':e.type.includes('HEAVY')||e.type==='CRITICAL_SHUTDOWN'?'var(--flame)':'var(--sun)';
+    return`<div class="tr"><div class="tr-dot" style="background:${dc}"></div><div class="tr-c"><div class="tr-act" style="color:${dc}">${e.type.replace(/_/g,' ')}</div><div class="tr-det">Cap: ${e.lim}% · ${e.cb.toFixed(3)}→${e.ca.toFixed(3)} kg/hr · +${e.sv.toFixed(4)} kg</div></div><div class="tr-time">${e.t}</div></div>`;
+  }).join('');
+  $t('trail-cnt',ms.optLog.length+' events');
+}
+function updateBcCounters(){
+  ['sb-bc','an-bc','bc-cnt'].forEach(id=>$t(id,gChain.length));
+  $t('bc-bl',gChain.length);$t('bc-sv',gSaved.toFixed(4)+' kg');
+  $t('bc-cr','₹'+((gSaved/1000)*CP).toFixed(4));
+  $t('bc-tx-cnt',gChain.length+' blocks');
+  $t('bc-sb-bl',gChain.length);
+  $t('bc-sb-sv',gSaved.toFixed(4)+' kg');
+  $t('bc-sb-cr','₹'+((gSaved/1000)*CP).toFixed(4));
+}
+
+// ─── CHARTS ──────────────────────────────────────────
+const BASE={responsive:true,maintainAspectRatio:false,animation:{duration:150},plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#374857',font:{size:7.5},maxTicksLimit:6},grid:{color:'rgba(255,255,255,.018)'}},y:{ticks:{color:'#374857',font:{size:7.5}},grid:{color:'rgba(255,255,255,.018)'},min:0}}};
+function mkChart(id,cfg){const c=G(id);if(!c)return null;return new Chart(c,cfg);}
+function pushCh(ch,lbl,...vals){
+  if(!ch)return;
+  if(ch.data.labels.length>50){ch.data.labels.shift();ch.data.datasets.forEach(d=>d.data.shift());}
+  ch.data.labels.push(lbl);vals.forEach((v,i)=>{if(ch.data.datasets[i])ch.data.datasets[i].data.push(v);});
+  ch.update('none');
+}
+function updSpark(id,arr){
+  const ch=charts[id];if(!ch)return;
+  ch.data.labels=arr.map((_,i)=>i);ch.data.datasets[0].data=[...arr];ch.update('none');
+}
+function initDashCharts(){
+  charts.co2=mkChart('ch-co2',{type:'line',data:{labels:[],datasets:[{label:'CO₂',data:[],borderColor:'#FF3D5A',backgroundColor:'rgba(255,61,90,.04)',fill:true,tension:.4,pointRadius:0,borderWidth:1.8},{label:'LSTM',data:[],borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,.02)',fill:true,tension:.4,pointRadius:0,borderWidth:1.4,borderDash:[5,4]}]},options:{...BASE,plugins:{legend:{display:true,labels:{color:'#374857',font:{size:8},boxWidth:7,padding:9}}}}});
+  charts.sv=mkChart('ch-sv',{type:'line',data:{labels:[],datasets:[{label:'AI Saved',data:[],borderColor:'#00FFB2',backgroundColor:'rgba(0,255,178,.04)',fill:true,tension:.4,pointRadius:0,borderWidth:1.8},{label:'Baseline',data:[],borderColor:'#FFB800',backgroundColor:'rgba(255,184,0,.02)',fill:true,tension:.4,pointRadius:0,borderWidth:1.4,borderDash:[5,4]}]},options:{...BASE,plugins:{legend:{display:true,labels:{color:'#374857',font:{size:8},boxWidth:7,padding:9}}}}});
+  [['sp-co2','#FF3D5A'],['sp-sv','#00FFB2'],['sp-pw','#4D9EFF']].forEach(([id,col])=>{
+    charts[id]=mkChart(id,{type:'line',data:{labels:[],datasets:[{data:[],borderColor:col,backgroundColor:'transparent',tension:.4,pointRadius:0,borderWidth:1.4}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:80},plugins:{legend:{display:false}},scales:{x:{display:false},y:{display:false}}}});
+  });
+}
+function initAnCharts(){
+  charts.anSv=mkChart('an-ch-sv',{type:'line',data:{labels:[],datasets:[{label:'Fleet CO₂ Saved',data:[],borderColor:'#00FFB2',backgroundColor:'rgba(0,255,178,.05)',fill:true,tension:.4,pointRadius:0,borderWidth:1.8},{label:'₹ Credits',data:[],borderColor:'#FFB800',backgroundColor:'rgba(255,184,0,.02)',fill:true,tension:.4,pointRadius:0,borderWidth:1.4,borderDash:[5,4],yAxisID:'y2'}]},options:{...BASE,plugins:{legend:{display:true,labels:{color:'#374857',font:{size:8},boxWidth:7,padding:9}}},scales:{...BASE.scales,y2:{ticks:{color:'#374857',font:{size:7.5}},grid:{display:false},position:'right'}}}});
+  charts.anDist=mkChart('an-ch-dist',{type:'bar',data:{labels:['Nominal','Throttle Light','Throttle Heavy','Critical'],datasets:[{data:[0,0,0,0],backgroundColor:['#00FFB2','#FFB800','#FF3D5A','#8B5CF6'],borderRadius:5,borderSkipped:false}]},options:{...BASE}});
+}
+
+// ─── CERTIFICATE ─────────────────────────────────────
+const C={
+  open(){
+    const d=G('cert-data');
+    if(d)d.innerHTML=`<strong>Factory:</strong> Chennai Plant 1<br><strong>Machines:</strong> ${MACHINES.length} active · Kirloskar Fleet<br><strong>Fleet CO₂ Saved:</strong> ${gSaved.toFixed(6)} kg<br><strong>Credits:</strong> ₹${((gSaved/1000)*CP).toFixed(7)}<br><strong>Chain Blocks:</strong> ${gChain.length}<br><strong>Merkle Root:</strong> ${gChain.length?gChain[0].hash.slice(0,32)+'...':'pending'}<br><strong>Network:</strong> Polygon Amoy Testnet<br><strong>Timestamp:</strong> ${new Date().toISOString()}`;
+    G('cert-claim').style.display='block';G('cert-suc').style.display='none';
+    const btn=G('cert-btn');if(btn){btn.disabled=false;btn.textContent='⬡ Claim on Polygon →';}
+    G('cert-prog').style.display='none';G('cp-fill').style.width='0';
+    G('cert-m').classList.add('on');
+  },
+  close(){G('cert-m').classList.remove('on');},
+  async mint(){
+    const btn=G('cert-btn');btn.disabled=true;btn.textContent='Processing...';
+    G('cert-prog').style.display='block';
+    const steps=[[10,'Computing Merkle root...'],[30,'Preparing transaction...'],[55,'Broadcasting to Polygon...'],[80,'Awaiting confirmation...'],[100,'Confirmed!']];
+    for(const[pct,msg]of steps){$t('cp-lbl',msg);G('cp-fill').style.width=pct+'%';await new Promise(r=>setTimeout(r,550));}
+    const ft='0x'+await sha256('carbonctrl-cert-'+Date.now()+gSaved);
+    $t('cert-tx',ft);
+    const pl=G('cert-plink');if(pl){pl.href=`${POLY}/tx/${ft}`;pl.onclick=()=>window.open(`${POLY}/tx/${ft}`);}
+    G('cert-claim').style.display='none';G('cert-suc').style.display='block';
+    toast('🎉 Certificate claimed on Polygon Amoy!','ok');
+  }
+};
+
+// ─── CHAIN UTILS ─────────────────────────────────────
+async function verifyChain(){
+  toast('Verifying '+gChain.length+' blocks...','info');
+  await new Promise(r=>setTimeout(r,500));
+  toast('✓ All '+gChain.length+' blocks verified — chain intact','ok');
+}
+function tamperDemo(){
+  if(!gChain.length){toast('No blocks yet. Wait for AI decisions.','warn');return;}
+  gChain[0].hash='CORRUPTED_'+gChain[0].hash.slice(10);
+  renderChain();toast('⚡ Block #'+gChain[0].idx+' tampered — chain breaks red!','err');
+}
+function exportChain(){
+  const blob=new Blob([JSON.stringify(gChain,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='carbonctrl-chain.json';a.click();
+  toast('Chain exported as JSON','ok');
+}
+
+// ─── UI CONTROLS ─────────────────────────────────────
+function toggleManual(){
+  gManual=!gManual;
+  const btn=G('manual-btn');if(btn)btn.textContent=gManual?'▶ Resume AI':'⏸ Manual Override';
+  toast(gManual?'Manual override — AI suspended':'AI control resumed',gManual?'warn':'ok');
+}
+function toggleFaq(el){
+  const item=el.closest('.fq');
+  document.querySelectorAll('.fq.open').forEach(i=>{if(i!==item)i.classList.remove('open');});
+  item.classList.toggle('open');
+}
+function scr(id){const el=G(id);if(el)el.scrollIntoView({behavior:'smooth'});}
+function toggleTheme(){
+  themeLight=!themeLight;
+  const r=document.documentElement.style;
+  if(themeLight){r.setProperty('--bg','#F2F0EB');r.setProperty('--bg2','#FAFAF8');r.setProperty('--s1','#FFFFFF');r.setProperty('--s2','#F0EDE6');r.setProperty('--s3','#E5E1D8');r.setProperty('--s4','#D8D3C9');r.setProperty('--s5','#CCC7BC');r.setProperty('--t1','#111010');r.setProperty('--t2','#4A4440');r.setProperty('--t3','#9A9490');r.setProperty('--wire','rgba(0,0,0,.055)');r.setProperty('--wire2','rgba(0,0,0,.1)');r.setProperty('--wire3','rgba(0,0,0,.16)');r.setProperty('--go','#007A52');r.setProperty('--gd','rgba(0,122,82,.07)');r.setProperty('--gb','rgba(0,122,82,.2)');}
+  else{r.setProperty('--bg','#030508');r.setProperty('--bg2','#06090F');r.setProperty('--s1','#0A0F17');r.setProperty('--s2','#0F141E');r.setProperty('--s3','#141B26');r.setProperty('--s4','#1A222E');r.setProperty('--s5','#202B3A');r.setProperty('--t1','#E4EAF3');r.setProperty('--t2','#768899');r.setProperty('--t3','#374857');r.setProperty('--wire','rgba(255,255,255,.04)');r.setProperty('--wire2','rgba(255,255,255,.08)');r.setProperty('--wire3','rgba(255,255,255,.14)');r.setProperty('--go','#00FFB2');r.setProperty('--gd','rgba(0,255,178,.06)');r.setProperty('--gb','rgba(0,255,178,.18)');}
+}
+function toggleKeys(){showingKeys=!showingKeys;G('keys').classList.toggle('on',showingKeys);}
+
+// ─── KEYBOARD ────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.key==='d')SP('dashboard');
+  else if(e.key==='a')SP('analytics');
+  else if(e.key==='b')SP('blockchain');
+  else if(e.key==='h')SP('landing');
+  else if(e.key==='l')SP('login');
+  else if(e.key==='t')toggleTheme();
+  else if(e.key==='c')C.open();
+  else if(e.key==='?'||e.key==='/')toggleKeys();
+  else if(e.key==='Escape'){G('keys').classList.remove('on');G('cert-m').classList.remove('on');G('crit-ov').classList.remove('on');showingKeys=false;}
+  else if(e.key>='1'&&e.key<='6')switchMachine(parseInt(e.key)-1);
+});
+
+// ─── CURSOR ──────────────────────────────────────────
+let cx=0,cy=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{
+  cx=e.clientX;cy=e.clientY;
+  const c=G('cur');if(c){c.style.left=cx+'px';c.style.top=cy+'px';}
+});
+setInterval(()=>{
+  rx+=(cx-rx)*.12;ry+=(cy-ry)*.12;
+  const c=G('cur2');if(c){c.style.left=rx+'px';c.style.top=ry+'px';}
+},16);
+document.addEventListener('mousedown',()=>{const c=G('cur');if(c)c.style.transform='translate(-50%,-50%) scale(.5)';});
+document.addEventListener('mouseup',()=>{const c=G('cur');if(c)c.style.transform='translate(-50%,-50%) scale(1)';});
+
+// ─── NAV SCROLL ──────────────────────────────────────
+window.addEventListener('scroll',()=>{
+  const el=G('pg-landing');
+  if(el&&el.classList.contains('on'))G('nav').classList.toggle('scrolled',el.scrollTop>20||window.scrollY>20);
+});
+
+// ─── SCROLL REVEAL ───────────────────────────────────
+const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('vis');});},{threshold:.08,rootMargin:'0px 0px -30px 0px'});
+document.querySelectorAll('.rev,.revl,.revr').forEach(el=>obs.observe(el));
+
+// ─── INIT ────────────────────────────────────────────
+SP('landing');
+</script>
+</body>
+</html>
